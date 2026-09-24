@@ -75,7 +75,7 @@ Entidades principais: `Idoso`, `Familiar_Cuidador`, `Medicamento`, `Confirmacao`
 
 Protótipo de alta fidelidade desenvolvido no Figma, cobrindo o fluxo completo: seleção de perfil → cadastro → login/biometria → tela inicial → lembrete de remédio → lembrete de consulta → SOS → assistente conversacional.
 
-🔗 Link do protótipo: _adicionar aqui_
+🔗 Link do protótipo: https://www.figma.com/design/LlvM0OKdhtX7vr7LzgoKRS/Untitled?node-id=0-1&p=f&t=Gvd4CPKAeHMS5v0W-0
 
 ## Roadmap (Sprints)
 
