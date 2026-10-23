@@ -1367,7 +1367,7 @@ export default function App() {
       );
   }
 
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
   }, [tab, elder]);

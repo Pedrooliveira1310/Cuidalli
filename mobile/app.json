@@ -5,9 +5,18 @@
     "version": "0.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "ios": { "supportsTablet": true },
-    "android": { "package": "br.com.kannali.cuidali" },
-    "plugins": ["expo-secure-store"],
-    "web": { "bundler": "metro" }
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "br.com.kannali.cuidali"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar"
+    ],
+    "web": {
+      "bundler": "metro"
+    }
   }
 }

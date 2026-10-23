@@ -6,10 +6,10 @@ A documentação original da sprint 1 foi preservada em `Kannali_Cuidali.docx` e
 
 ## Requisitos
 
-- Node.js 22.13 ou superior (validação nesta entrega: Node 24).
+- Node.js 22.13+ na linha 22, 24.3+ na linha 24, ou 26+ (validação: Node 24.19).
 - PHP **8.2 ou superior**, extensões PDO e pdo_mysql.
 - MySQL 8 ou MariaDB 10.6 ou superior.
-- Expo Go compatível com **SDK 55**, ou development build correspondente. Versões incompatíveis do Expo Go exigem build ou atualização planejada do SDK.
+- Expo Go compatível com **SDK 58**, ou development build correspondente. Versões incompatíveis do Expo Go exigem build ou atualização planejada do SDK.
 - Para testes web: Chromium ou navegador instalado pelo Playwright.
 
 ## Banco e API
@@ -33,6 +33,8 @@ php -S 0.0.0.0:8000 -t public public/index.php
 O migrador registra versões em `schema_migrations`. Rode novamente para aplicar novas versões; ele não recria tabelas nem apaga dados. Não altere SQL já aplicado: novas mudanças devem ser novos arquivos numerados. `GET /health` verifica conexão com o banco. O servidor embutido é destinado a desenvolvimento; em produção use HTTPS e servidor PHP apropriado, com raiz exclusivamente em `backend/public`.
 
 ## Aplicativo
+
+O projeto usa Expo SDK 58. Para atualizar uma instalação existente, consulte [Migração para SDK 58](docs/MIGRACAO-SDK58.md).
 
 ```sh
 cd mobile
