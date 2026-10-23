@@ -2,7 +2,7 @@
 
 Kannali Corp — SENAI A. Jacob Lafer. Aplicativo para idosos e cuidadores, com Expo/React Native/TypeScript, API PHP orientada a objetos/PDO e MySQL/MariaDB persistente.
 
-A documentação original da sprint 1 foi preservada em `Kannali_Cuidali.docx`. Referências visuais: telas do Figma fornecidas pelo autor na conversa (idoso, cuidador e relógio). Foram preservados azul, cartões azuis/amarelos e a organização das jornadas. O relógio não é implementado nesta sprint.
+A documentação original da sprint 1 foi preservada em `Kannali_Cuidali.docx` e o README anterior em `docs/README-SPRINT1.md`. Referências visuais: telas do Figma fornecidas pelo autor na conversa (idoso, cuidador e relógio). Foram preservados azul, cartões azuis/amarelos e a organização das jornadas. O relógio não é implementado nesta sprint.
 
 ## Requisitos
 
