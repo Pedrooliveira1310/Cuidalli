@@ -1,103 +1,125 @@
-# Cuidali
+# Cuidali · Sprint 2
 
-**Assistente Virtual e Plataforma de Cuidado para Idosos**
+Kannali Corp — SENAI A. Jacob Lafer. Aplicativo para idosos e cuidadores, com Expo/React Native/TypeScript, API PHP orientada a objetos/PDO e MySQL/MariaDB persistente.
 
-> Kannali Corp: Conectando gerações, cuidando de vidas.
+A documentação original da sprint 1 foi preservada em `Kannali_Cuidali.docx`. Referências visuais: telas do Figma fornecidas pelo autor na conversa (idoso, cuidador e relógio). Foram preservados azul, cartões azuis/amarelos e a organização das jornadas. O relógio não é implementado nesta sprint.
 
-![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
-![Sprint](https://img.shields.io/badge/sprint-1%20conclu%C3%ADda-blue)
-![Curso](https://img.shields.io/badge/SENAI-4%C2%BA%20Termo%20DS-informational)
+## Requisitos
 
----
+- Node.js 22.13 ou superior (validação nesta entrega: Node 24).
+- PHP **8.2 ou superior**, extensões PDO e pdo_mysql.
+- MySQL 8 ou MariaDB 10.6 ou superior.
+- Expo Go compatível com **SDK 55**, ou development build correspondente. Versões incompatíveis do Expo Go exigem build ou atualização planejada do SDK.
+- Para testes web: Chromium ou navegador instalado pelo Playwright.
 
-## Sobre o projeto
+## Banco e API
 
-O envelhecimento da população, muitas vezes acompanhado de isolamento social, traz desafios crescentes ao cuidado com a saúde e o bem-estar da pessoa idosa. O **Cuidali** é um sistema que integra um **aplicativo mobile acessível** para idosos e um **painel web** para cuidadores e familiares, combinando interação conversacional (voz e texto), lembretes ativos de medicação com confirmação, agendamento de consultas médicas e um botão de emergência SOS.
+Crie um banco e um usuário local. Execute em uma sessão administrativa do MySQL; substitua a senha de exemplo por uma senha local:
 
-A proposta é desmistificar a tecnologia para a terceira idade: interface com botões ampliados, alto contraste e navegação mínima, prevenindo erros acidentais e promovendo autonomia.
+```sql
+CREATE DATABASE cuidali CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'cuidali'@'127.0.0.1' IDENTIFIED BY 'SUBSTITUA_POR_SENHA_LOCAL';
+GRANT ALL PRIVILEGES ON cuidali.* TO 'cuidali'@'127.0.0.1';
+```
 
-Projeto desenvolvido como Trabalho de Conclusão do 4º Termo do curso Técnico em Desenvolvimento de Sistemas — SENAI "A. Jacob Lafer", sob metodologia ágil Scrum.
+```sh
+cd backend
+cp .env.example .env
+# Configure DB_HOST, DB_PORT, DB_NAME, DB_USER e DB_PASSWORD no .env.
+php migrate.php
+php -S 0.0.0.0:8000 -t public public/index.php
+```
 
-## Equipe — Kannali Corp
+O migrador registra versões em `schema_migrations`. Rode novamente para aplicar novas versões; ele não recria tabelas nem apaga dados. Não altere SQL já aplicado: novas mudanças devem ser novos arquivos numerados. `GET /health` verifica conexão com o banco. O servidor embutido é destinado a desenvolvimento; em produção use HTTPS e servidor PHP apropriado, com raiz exclusivamente em `backend/public`.
 
-| Integrante | Função Scrum / Especialidade |
-| --- | --- |
-| Pedro de Oliveira | Scrum Master / Backend Engineer |
-| Enzo Avanze | Product Owner / Full Stack Developer |
-| Isabella Dias da Silva | UI/UX Specialist / Mobile Developer |
-| Enzo Yudi Kadooka | Frontend Lead / Mobile Developer |
-| Vitor Matheus Canali Pereira | Database Specialist / Backend Developer |
-| Evelyn Silva de Lima | QA Engineer / Technical Writer |
+## Aplicativo
 
-## Funcionalidades
+```sh
+cd mobile
+cp .env.example .env
+# Defina EXPO_PUBLIC_API_URL=http://IP_DO_COMPUTADOR:8000
+npm ci
+npm start
+```
 
-**App mobile (idoso)**
-- Tela inicial simplificada com lembretes do dia
-- Lembrete de medicação com confirmação ("Já tomei" / "Ainda não")
-- Lembrete de consultas médicas
-- Botão de emergência SOS (toque único, aciona contato de confiança)
-- Assistente conversacional por voz e texto
+No celular físico, use o IP de rede do computador, nunca `localhost`. Computador e celular devem estar na mesma rede, com porta 8000 liberada no firewall. A URL não contém `/public` usando o comando acima. Abra o QR code com Expo Go compatível. Emulador Android padrão pode usar `http://10.0.2.2:8000`.
 
-**Painel web (familiar / cuidador)**
-- Cadastro do idoso, medicamentos, horários e consultas
-- Cadastro de contato(s) de emergência
-- Histórico de confirmações de medicação e alertas de SOS
-- Alerta de inatividade (idoso sem interagir com o app por período prolongado)
+```sh
+npm run web
+npm run typecheck
+npm run export:web
+```
 
-## Diferenciais
+Para web, adicione a origem exata (por exemplo `http://localhost:8081`) a `CORS_ORIGINS` no backend. CORS não substitui a autenticação. Em Android/iOS o token fica em Expo SecureStore; no navegador fica somente em memória e sair/recarregar exige novo login. Nenhuma senha é armazenada no app.
 
-- **Confirmação ativa** — o app conversa com o idoso e pede confirmação, em vez de apenas disparar uma notificação estática
-- **Alerta de inatividade** — detecta longos períodos sem uso e avisa o familiar
-- **Acessibilidade real** — tipografia grande (18–28px), alto contraste, áreas de toque de no mínimo 56px, seguindo diretrizes WCAG 2.1
+### Windows / XAMPP
 
-## Identidade visual
+1. Instale XAMPP com PHP 8.2+ e inicie MySQL. Ative `extension=pdo_mysql` em `php.ini`, se necessário.
+2. Adicione `C:\xampp\php` ao PATH e confirme `php -v` e `php -m`.
+3. Crie banco e usuário no phpMyAdmin/SQL conforme acima. O XAMPP pode usar outro host/porta: ajuste `backend\.env`. Evite usar `root` na aplicação.
+4. No PowerShell, dentro de `backend`: `Copy-Item .env.example .env`, edite o arquivo e execute `php migrate.php`.
+5. Ainda em `backend`, rode `php -S 0.0.0.0:8000 -t public public/index.php`. Esse modo não depende de rewrite do Apache.
+6. Execute `ipconfig`, encontre o IPv4 da interface Wi-Fi e configure `mobile\.env`: `EXPO_PUBLIC_API_URL=http://192.168.x.x:8000`.
+7. Em outro terminal: `cd mobile`, `npm ci`, `npm start`. Libere PHP/porta 8000 apenas na rede privada. Reinicie o Metro após mudar a URL.
 
-| Cor | Hex | Uso |
-| --- | --- | --- |
-| Azul Institucional | `#1A365D` | Cabeçalhos, navegação, títulos |
-| Azul Acolhedor | `#2B6CB0` | Botões primários, ícones, estados ativos |
-| Vermelho SOS | `#E53E3E` | Botão de emergência e alertas urgentes |
-| Verde Sucesso | `#38A169` | Confirmação de medicação, status positivo |
-| Fundo Neutro | `#F7FAFC` | Fundo de tela, alta legibilidade |
+O `.env` e o SQL não devem ser expostos por Apache. Se optar por Apache, configure um VirtualHost com DocumentRoot em `backend/public` e roteamento para `index.php`, adaptando a URL do app.
 
-Tipografia: famílias sem serifa (Inter, Roboto), priorizando legibilidade para o público idoso.
+## Primeiro uso
 
-## Modelagem de dados
+Não há seed ou contas prontas. Cadastre contas fictícias pelo app.
 
-Modelagem completa disponível em [`/docs`](./docs):
-- **MER** — modelo conceitual (entidades e relacionamentos)
-- **DER** — modelo detalhado (atributos, chaves primárias/estrangeiras, tipos de dados)
-- **Dicionário de Dados** — especificação completa de todas as entidades
+1. Selecione o perfil, cadastre nome, nascimento, telefone e senha. O idoso também informa contato de emergência.
+2. Entre como idoso, abra **Cuidados → Vínculos**, gere o código e compartilhe-o somente com um cuidador de confiança.
+3. Entre como cuidador e informe o código. O compartilhamento é a autorização explícita: o código conclui um vínculo, uma única vez, em até 10 minutos.
+4. Selecione o idoso no painel. Cadastre medicamentos com vários horários e período de uso, consultas e contatos. A pessoa idosa vê os dados reais e confirma cada dose do dia.
+5. Registros de dor aparecem aos cuidadores vinculados, com histórico de intensidade e visualizações identificadas. Remover o vínculo revoga o acesso.
 
-Entidades principais: `Idoso`, `Familiar_Cuidador`, `Medicamento`, `Confirmacao`, `Consulta`, `Contato_Emergencia`, `Alerta_Emergencia`, `Historico_Interacao`.
+## Testes
 
-## Protótipo
+Crie um **banco separado** chamado `cuidali_test`, conceda acesso ao usuário e configure as variáveis nesse terminal. O teste apaga dados desse banco e recusa nomes sem sufixo `_test`.
 
-Protótipo de alta fidelidade desenvolvido no Figma, cobrindo o fluxo completo: seleção de perfil → cadastro → login/biometria → tela inicial → lembrete de remédio → lembrete de consulta → SOS → assistente conversacional.
+```sh
+cd backend
+DB_NAME=cuidali_test php migrate.php
+DB_NAME=cuidali_test php -S 127.0.0.1:8001 -t public public/index.php
+# Em outro terminal, com as mesmas configurações DB_*:
+DB_NAME=cuidali_test TEST_ALLOW_RESET=1 php tests/integration.php
+```
 
-🔗 Link do protótipo: https://www.figma.com/design/LlvM0OKdhtX7vr7LzgoKRS/Untitled?node-id=0-1&p=f&t=Gvd4CPKAeHMS5v0W-0
+No PowerShell, use `$env:DB_NAME='cuidali_test'` e `$env:TEST_ALLOW_RESET='1'` antes dos comandos PHP. Retire essas variáveis após testar. Nunca aponte testes para dados reais.
 
-## Roadmap (Sprints)
+Teste da interface com API/banco reais (cria contas fictícias e registros no banco configurado pela API):
 
-| Sprint | Objetivo | Entregáveis |
-| --- | --- | --- |
-| **Sprint 1** ✅ | Levantamento de requisitos, modelagem conceitual/lógica (MER/DER), dicionário de dados, protótipo de alta fidelidade | Documento de requisitos, MER, DER, dicionário de dados, protótipo Figma |
-| **Sprint 2** 🔄 | Desenvolvimento da API REST, estrutura do banco de dados, telas iniciais do mobile | Banco de dados criado, rotas da API, telas de autenticação/home |
-| **Sprint 3** ⏳ | Integração SOS, assistente de voz, testes de acessibilidade/usabilidade, documentação técnica ABNT | Sistema funcional completo, relatório de testes, apresentação final |
+```sh
+# API de desenvolvimento ativa em 8000, banco cuidali, CORS localhost:8081.
+cd mobile
+# .env com EXPO_PUBLIC_API_URL=http://127.0.0.1:8000 para teste web local.
+npm run export:web
+python -m http.server 8081 --directory dist
+# Outro terminal, em mobile:
+npx playwright install chromium
+npm run test:e2e
+# Alternativa Linux se Chromium já estiver instalado:
+CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e
+```
 
-## Tecnologias
+Use `E2E_WEB_URL` e `E2E_API_URL` para portas diferentes; a URL embutida no bundle também deve ser atualizada. Os testes E2E verificam cadastro, campos obrigatórios, estado vazio, vinculação, criação de medicamento, dose, dor e leitura pelo cuidador, além de falha de rede. São testes no navegador, não em dispositivo físico.
 
-> Stack em definição pela equipe — atualizar conforme decisões técnicas forem fechadas.
+Veja [API e permissões](docs/API.md), [modelo de dados](docs/MODELO.md) e [entrega e validação](docs/ENTREGA.md).
 
-- **Mobile:** a definir (ex.: React Native/Expo)
-- **Web:** a definir
-- **Backend:** API REST
-- **Banco de dados:** relacional (MySQL)
+## Ambiente Codex usado nesta entrega
 
-## Status do projeto
+No Debian 13 sem instalação global de pacotes, `bash scripts/cloud-install.sh` prepara ferramentas em `/workspace/cuidali-tools`, valida assinaturas/checksums pelo APT, mantém o banco em `/workspace/cuidali-tools/data` e instala dependências com `npm ci`. Não altera o PHP global. Executa com PHP 8.4, compatível com o mínimo 8.2 do projeto.
 
-🚧 Em desenvolvimento — Sprint 1 concluída.
+Em terminais separados:
 
-## Contexto acadêmico
+```sh
+bash scripts/cloud-start.sh api
+bash scripts/cloud-start.sh mobile
+# Apenas para a suíte HTTP:
+bash scripts/cloud-start.sh test-api
+DB_PORT=3307 DB_USER=cuidali DB_NAME=cuidali_test TEST_ALLOW_RESET=1 \
+  /workspace/cuidali-tools/bin/php backend/tests/integration.php
+```
 
-Projeto desenvolvido para fins educacionais como parte do Trabalho de Conclusão do curso Técnico em Desenvolvimento de Sistemas, SENAI "A. Jacob Lafer" — Santo André, 2026.
+O helper usa contas de banco sem senha **somente no ambiente acadêmico isolado**, ligado a 127.0.0.1:3307, com dados fictícios. Não execute esse helper em servidor compartilhado ou produção. Para outros ambientes e senhas, siga a instalação padrão acima. Não crie worktree para uso normal: cada tarefa cloud já é isolada. Os dados/dependências podem permanecer no snapshot; processos MariaDB, API e Metro precisam ser reiniciados. O Metro cloud usa `--localhost`; conexão de celular físico requer um host alcançável e o procedimento de rede descrito acima.
