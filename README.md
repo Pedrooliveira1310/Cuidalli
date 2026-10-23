@@ -76,6 +76,8 @@ Não há seed ou contas prontas. Cadastre contas fictícias pelo app.
 
 ## Testes
 
+A revisão de correções e sua validação estão em [Correções da sprint 2](docs/CORRECOES-SPRINT2.md). Os testes unitários compartilhados rodam em `mobile` com `npm run test:unit`.
+
 Crie um **banco separado** chamado `cuidali_test`, conceda acesso ao usuário e configure as variáveis nesse terminal. O teste apaga dados desse banco e recusa nomes sem sufixo `_test`.
 
 ```sh
@@ -91,16 +93,16 @@ No PowerShell, use `$env:DB_NAME='cuidali_test'` e `$env:TEST_ALLOW_RESET='1'` a
 Teste da interface com API/banco reais (cria contas fictícias e registros no banco configurado pela API):
 
 ```sh
-# API de desenvolvimento ativa em 8000, banco cuidali, CORS localhost:8081.
+# API de testes ativa em 8001, banco cuidali_test, CORS localhost:8081.
 cd mobile
-# .env com EXPO_PUBLIC_API_URL=http://127.0.0.1:8000 para teste web local.
+# .env com EXPO_PUBLIC_API_URL=http://127.0.0.1:8001 para teste web local.
 npm run export:web
 python -m http.server 8081 --directory dist
 # Outro terminal, em mobile:
 npx playwright install chromium
-npm run test:e2e
+E2E_API_URL=http://127.0.0.1:8001 npm run test:e2e
 # Alternativa Linux se Chromium já estiver instalado:
-CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e
+CHROMIUM_PATH=/usr/bin/chromium E2E_API_URL=http://127.0.0.1:8001 npm run test:e2e
 ```
 
 Use `E2E_WEB_URL` e `E2E_API_URL` para portas diferentes; a URL embutida no bundle também deve ser atualizada. Os testes E2E verificam cadastro, campos obrigatórios, estado vazio, vinculação, criação de medicamento, dose, dor e leitura pelo cuidador, além de falha de rede. São testes no navegador, não em dispositivo físico.

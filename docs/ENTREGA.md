@@ -1,5 +1,7 @@
 # Entrega da sprint 2
 
+A validação atual das correções está em [Revisão da sprint 2](CORRECOES-SPRINT2.md). O relato abaixo preserva a entrega original.
+
 ## Implementado
 
 - Aplicativo Expo/TypeScript com seleção de perfil, cadastro, login, sessão segura no Android/iOS e saída.

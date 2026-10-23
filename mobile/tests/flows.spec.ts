@@ -95,12 +95,25 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   const meds: Record<string, string> = {
     Medicamento: "Remédio E2E",
     Dosagem: "50 mg",
-    "Horários separados por vírgula": "08:00, 20:00",
+    "Horário 1": "08:00",
     "Início do uso": date,
     "Fim do uso": date,
   };
   for (const [label, value] of Object.entries(meds))
     await caregiver.getByLabel(label, { exact: true }).fill(value);
+  await caregiver
+    .getByRole("button", { name: "Adicionar horário", exact: true })
+    .click();
+  await caregiver.getByLabel("Horário 2", { exact: true }).fill("20:00");
+  await caregiver.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(caregiver.getByText("Medicamento salvo.")).toBeVisible();
+  await caregiver.getByRole("button", { name: "Editar", exact: true }).click();
+  await expect(caregiver.getByLabel("Horário 1", { exact: true })).toHaveValue(
+    "08:00",
+  );
+  await expect(caregiver.getByLabel("Horário 2", { exact: true })).toHaveValue(
+    "20:00",
+  );
   await caregiver.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(caregiver.getByText("Medicamento salvo.")).toBeVisible();
   await page.getByRole("tab", { name: "Início", exact: true }).click();
@@ -150,6 +163,79 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   });
   await caregiver.screenshot({
     path: "test-results/cuidador-dores.png",
+    fullPage: true,
+  });
+  // Consultas e contatos também usam a API real do banco isolado.
+  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await caregiver
+    .getByRole("button", { name: "Consultas", exact: true })
+    .click();
+  await caregiver
+    .getByRole("button", { name: "Adicionar consulta", exact: true })
+    .click();
+  await expect(
+    caregiver.getByLabel("Data e hora (São Paulo)", { exact: true }),
+  ).toHaveAttribute("type", "datetime-local");
+  for (const [label, value] of Object.entries({
+    "Médico(a)": "Dra. E2E",
+    Especialidade: "Clínica geral",
+    "Data e hora (São Paulo)": date + "T14:30",
+    Local: "Sala fictícia",
+  }))
+    await caregiver.getByLabel(label, { exact: true }).fill(value);
+  await caregiver.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(caregiver.getByText("Consulta salva.")).toBeVisible();
+  await caregiver.getByRole("button", { name: "Editar", exact: true }).click();
+  await expect(
+    caregiver.getByLabel("Data e hora (São Paulo)", { exact: true }),
+  ).toHaveValue(date + "T14:30");
+  await caregiver.getByLabel("Local", { exact: true }).fill("Sala 2 fictícia");
+  await caregiver.getByRole("button", { name: "Salvar", exact: true }).click();
+  caregiver.once("dialog", (d) => d.accept());
+  await caregiver
+    .getByRole("button", { name: "Cancelar consulta", exact: true })
+    .click();
+  await expect(caregiver.getByText("Consulta cancelada.")).toBeVisible();
+  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await caregiver
+    .getByRole("button", { name: "Contatos", exact: true })
+    .click();
+  await caregiver
+    .getByRole("button", { name: "Adicionar contato", exact: true })
+    .click();
+  for (const [label, value] of Object.entries({
+    "Nome do contato": "Contato SOS E2E",
+    "Telefone com DDD": "+55 (11) 98888-7777",
+    Parentesco: "Irmã",
+  }))
+    await caregiver.getByLabel(label, { exact: true }).fill(value);
+  await caregiver.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(caregiver.getByText("Contato salvo.")).toBeVisible();
+  const primarySaved = caregiver.waitForResponse(
+    (r) => r.url().includes("/contacts/") && r.request().method() === "PATCH",
+  );
+  await caregiver
+    .getByRole("button", { name: "Usar no SOS", exact: true })
+    .click();
+  expect((await primarySaved).ok()).toBeTruthy();
+  await expect(
+    caregiver.getByRole("button", { name: "Usar no SOS", exact: true }),
+  ).toHaveCount(1);
+  const contacts = await request.get(`${base}/elders/${elder}/contacts`, {
+    headers: { Authorization: `Bearer ${elderLogin.token}` },
+  });
+  expect(
+    (await contacts.json()).items.find((c: any) => Number(c.is_primary) === 1)
+      .name,
+  ).toBe("Contato SOS E2E");
+  await page.getByRole("tab", { name: "SOS", exact: true }).click();
+  await expect(
+    page.getByText("Contato SOS E2E (Irmã)", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("5511988887777", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Você precisa iniciar a/)).toBeVisible();
+  await page.screenshot({
+    path: "test-results/sos-mobile.png",
     fullPage: true,
   });
   await context.close();

@@ -1,17 +1,20 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
+  AppState,
+  BackHandler,
   View,
   Text,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Linking,
   Pressable,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import {
+  onAccessDenied,
+  ApiError,
   api,
   saveToken,
   restoreToken,
@@ -19,6 +22,7 @@ import {
   User,
 } from "./src/api";
 import {
+  FormBusy,
   Button,
   Card,
   Form,
@@ -28,10 +32,12 @@ import {
   confirmAction,
   dateTime,
   localInput,
+  calendarDate,
 } from "./src/ui";
+import { openDialer } from "./src/phone";
 const profileFields: Field[] = [
   { key: "name", label: "Nome completo" },
-  { key: "birth_date", label: "Nascimento", placeholder: "AAAA-MM-DD" },
+  { key: "birth_date", label: "Nascimento", placeholder: "DD/MM/AAAA" },
   { key: "phone", label: "Telefone com DDD", phone: true },
   { key: "password", label: "Senha (8 a 72 caracteres)", secure: true },
 ];
@@ -46,11 +52,10 @@ const medicationFields: Field[] = [
   { key: "dosage", label: "Dosagem", placeholder: "Ex.: 50 mg" },
   {
     key: "times",
-    label: "Horários separados por vírgula",
-    placeholder: "08:00, 20:00",
+    label: "Horários",
   },
-  { key: "start_date", label: "Início do uso", placeholder: "AAAA-MM-DD" },
-  { key: "end_date", label: "Fim do uso", placeholder: "AAAA-MM-DD" },
+  { key: "start_date", label: "Início do uso", placeholder: "DD/MM/AAAA" },
+  { key: "end_date", label: "Fim do uso", placeholder: "DD/MM/AAAA" },
 ];
 const appointmentFields: Field[] = [
   { key: "doctor", label: "Médico(a)" },
@@ -58,7 +63,7 @@ const appointmentFields: Field[] = [
   {
     key: "scheduled_at",
     label: "Data e hora (São Paulo)",
-    placeholder: "AAAA-MM-DDTHH:MM",
+    placeholder: "DD/MM/AAAA HH:MM",
   },
   { key: "location", label: "Local" },
 ];
@@ -92,32 +97,99 @@ function useData(path: string) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
-    [revision, setRevision] = useState(0);
-  const reload = useCallback(() => setRevision((v) => v + 1), []);
+    [revision, setRevision] = useState(0),
+    [denied, setDenied] = useState(false);
+  const requestVersion = useRef(0);
+  const reload = useCallback(() => {
+    requestVersion.current++;
+    setLoading(true);
+    setRevision((v) => v + 1);
+  }, []);
+  useEffect(
+    () =>
+      onAccessDenied((denied, status) => {
+        if (denied === path || denied.startsWith(path + "/")) {
+          requestVersion.current++;
+          setLoading(false);
+          setDenied(true);
+          setData(null);
+          setError(
+            status === 401
+              ? "Sua sessão expirou. Entre novamente."
+              : "Acesso indisponível. Atualize a lista.",
+          );
+        }
+      }),
+    [path],
+  );
   useEffect(() => {
     let active = true;
+    const version = ++requestVersion.current;
     setLoading(true);
     setError("");
-    setData(null);
     api(path)
       .then((v) => {
-        if (active) setData(v);
+        if (active && version === requestVersion.current) {
+          setData(v);
+          setDenied(false);
+        }
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (
+          active &&
+          (version === requestVersion.current ||
+            (e instanceof ApiError && [401, 403, 404].includes(e.status)))
+        ) {
+          if (e instanceof ApiError && [401, 403, 404].includes(e.status))
+            setData(null);
+          setError("Não foi possível atualizar os dados. " + e.message);
+        }
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && version === requestVersion.current) setLoading(false);
       });
     return () => {
       active = false;
     };
   }, [path, revision]);
-  return { data, error, loading, reload };
+  useEffect(() => {
+    let day = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "America/Sao_Paulo",
+    }).format(new Date());
+    const subscription = AppState.addEventListener("change", (status) => {
+      if (status === "active") reload();
+    });
+    const timer = setInterval(() => {
+      const today = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "America/Sao_Paulo",
+      }).format(new Date());
+      if (today !== day) {
+        day = today;
+        reload();
+      }
+    }, 1000);
+    const visible = () => {
+      if (document.visibilityState === "visible") reload();
+    };
+    if (Platform.OS === "web")
+      document.addEventListener("visibilitychange", visible);
+    return () => {
+      subscription.remove();
+      clearInterval(timer);
+      if (Platform.OS === "web")
+        document.removeEventListener("visibilitychange", visible);
+    };
+  }, [reload]);
+  return { data: denied ? null : data, error, loading, reload, denied };
 }
 function Loading({ state }: { state: ReturnType<typeof useData> }) {
   return (
     <>
+      <Button
+        label="Atualizar lista"
+        onPress={state.reload}
+        disabled={state.loading}
+      />
       {state.loading && (
         <View accessibilityLabel="Carregando">
           <ActivityIndicator size="large" />
@@ -297,7 +369,7 @@ function Home({
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   async function dose(id: number, status: string) {
-    if (busy) return;
+    if (busy || state.loading || state.error || !state.data) return;
     setBusy(true);
     setMessage("");
     try {
@@ -357,13 +429,13 @@ function Home({
                 <>
                   <Button
                     label="✓ Já tomei"
-                    disabled={busy}
+                    disabled={busy || state.loading || !!state.error}
                     onPress={() => dose(d.time_id, "taken")}
                   />
                   <Button
                     label="Ainda não"
                     tone="light"
-                    disabled={busy}
+                    disabled={busy || state.loading || !!state.error}
                     onPress={() => dose(d.time_id, "pending")}
                   />
                 </>
@@ -410,7 +482,8 @@ function Home({
               {state.data.dose_history.map((d: any) => (
                 <Card key={d.id}>
                   <Text style={s.text}>
-                    {d.dose_date} · {d.time.slice(0, 5)} · {d.name}
+                    {calendarDate(d.dose_date)} · {d.time.slice(0, 5)} ·{" "}
+                    {d.name}
                     {"\n"}
                     {statusLabel[d.status]}
                     {"\n"}Registrado: {dateTime(d.recorded_at)}
@@ -472,7 +545,9 @@ function Resources({
           {message}
         </Text>
       )}
-      {editing ? (
+      {state.denied ? (
+        <Loading state={state} />
+      ) : editing ? (
         <Card>
           <Text style={s.subtitle}>{editing.id ? "Editar" : "Adicionar"}</Text>
           <Form
@@ -489,7 +564,7 @@ function Resources({
                   dosage: values.dosage,
                   start_date: values.start_date,
                   end_date: values.end_date,
-                  times: values.times.split(",").map((t: string) => t.trim()),
+                  times: values.times,
                 };
               else if (kind === "appointments")
                 payload = {
@@ -549,7 +624,8 @@ function Resources({
                     {item.dosage} ·{" "}
                     {Number(item.active) ? "Ativo" : "Desativado"}
                     {"\n"}
-                    {item.start_date} até {item.end_date}
+                    {calendarDate(item.start_date)} até{" "}
+                    {calendarDate(item.end_date)}
                     {"\n"}Horários:{" "}
                     {item.times.map((t: any) => t.time).join(", ")}
                   </Text>
@@ -568,22 +644,41 @@ function Resources({
                 </>
               ) : (
                 <>
-                  <Text style={s.text}>
+                  <Text selectable style={s.text}>
                     {item.relationship} · {item.phone}
                     {Number(item.is_primary)
                       ? "\n★ Contato principal do SOS"
                       : ""}
                   </Text>
+                  {!Number(item.is_primary) && (
+                    <Button
+                      label="Usar no SOS"
+                      disabled={busy}
+                      onPress={async () => {
+                        if (busy) return;
+                        setBusy(true);
+                        try {
+                          await api(`${path}/${item.id}`, "PATCH", {
+                            name: item.name,
+                            phone: item.phone,
+                            relationship: item.relationship,
+                            is_primary: true,
+                          });
+                          state.reload();
+                        } catch (e) {
+                          setMessage((e as Error).message);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    />
+                  )}
                   <Button
                     label={`Abrir discador: ${item.name}`}
                     tone="light"
-                    onPress={() => {
-                      Linking.openURL(`tel:${item.phone}`).catch(() =>
-                        setMessage(
-                          "Não foi possível abrir o discador neste dispositivo.",
-                        ),
-                      );
-                    }}
+                    onPress={async () =>
+                      setMessage(await openDialer(item.phone))
+                    }
                   />
                 </>
               )}
@@ -600,9 +695,7 @@ function Resources({
                           ...item,
                           ...(kind === "medications"
                             ? {
-                                times: item.times
-                                  .map((t: any) => t.time)
-                                  .join(", "),
+                                times: item.times.map((t: any) => t.time),
                               }
                             : {}),
                           ...(kind === "appointments"
@@ -643,6 +736,7 @@ function Resources({
   );
 }
 function BodyMap({
+  disabled = false,
   view,
   region,
   onSelect,
@@ -650,6 +744,7 @@ function BodyMap({
   view: string;
   region: string;
   onSelect: (r: string) => void;
+  disabled?: boolean;
 }) {
   const points: [string, number, number][] = [
     ["head", 45, 2],
@@ -672,13 +767,16 @@ function BodyMap({
   ];
   // Costas espelham a posição visual, mantendo os lados anatômicos do paciente.
   return (
-    <View style={{ height: 460, width: 280, alignSelf: "center" }}>
+    <View
+      style={{ height: 460, width: "100%", maxWidth: 280, alignSelf: "center" }}
+    >
       {points.map(([r, x, y]) => (
         <Pressable
           key={r}
           accessibilityRole="button"
           accessibilityLabel={regions[r]}
-          accessibilityState={{ selected: r === region }}
+          disabled={disabled}
+          accessibilityState={{ selected: r === region, disabled }}
           onPress={() => onSelect(r)}
           style={{
             position: "absolute",
@@ -732,206 +830,229 @@ function Pains({ elder, user }: { elder: number; user: User }) {
     }
   }
   return (
-    <>
-      <Text style={s.title}>Registro de dores</Text>
-      {!!message && (
-        <Text accessibilityRole="alert" style={s.text}>
-          {message}
-        </Text>
-      )}
-      {user.role === "elder" && !creating && (
-        <Button label="Registrar uma dor" onPress={() => setCreating(true)} />
-      )}{" "}
-      {creating ? (
-        <>
-          <Text style={s.subtitle}>Onde dói?</Text>
-          <View style={s.row}>
-            {[
-              ["front", "Frente"],
-              ["back", "Costas"],
-            ].map(([v, l]) => (
-              <Button
-                key={v}
-                label={(view === v ? "✓ " : "") + l}
-                tone={view === v ? "blue" : "light"}
-                onPress={() => {
-                  setView(v);
-                  if (
-                    ["chest", "abdomen", "upper_back", "lower_back"].includes(
-                      region,
-                    )
-                  )
-                    setRegion(v === "front" ? "chest" : "upper_back");
-                }}
-              />
-            ))}
-          </View>
-          <Text style={s.muted}>
-            Direita e esquerda são sempre os lados da pessoa que sente a dor.
+    <FormBusy.Provider value={busy}>
+      <>
+        <Text style={s.title}>Registro de dores</Text>
+        {!!message && (
+          <Text accessibilityRole="alert" style={s.text}>
+            {message}
           </Text>
-          <BodyMap view={view} region={region} onSelect={setRegion} />
-          <Text style={s.subtitle}>Local: {regions[region]}</Text>
-          <Text style={s.muted}>Também é possível selecionar pela lista:</Text>
-          <View style={s.row}>
-            {Object.entries(regions)
-              .filter(([k]) =>
-                view === "front"
-                  ? !["upper_back", "lower_back"].includes(k)
-                  : !["chest", "abdomen"].includes(k),
-              )
-              .map(([k, l]) => (
+        )}
+        {user.role === "elder" && !creating && (
+          <Button label="Registrar uma dor" onPress={() => setCreating(true)} />
+        )}{" "}
+        {state.denied ? (
+          <Loading state={state} />
+        ) : creating ? (
+          <>
+            <Text style={s.subtitle}>Onde dói?</Text>
+            <View style={s.row}>
+              {[
+                ["front", "Frente"],
+                ["back", "Costas"],
+              ].map(([v, l]) => (
                 <Button
-                  key={k}
-                  label={(region === k ? "✓ " : "") + l}
-                  tone={region === k ? "blue" : "light"}
-                  onPress={() => setRegion(k)}
+                  key={v}
+                  label={(view === v ? "✓ " : "") + l}
+                  tone={view === v ? "blue" : "light"}
+                  onPress={() => {
+                    setView(v);
+                    if (
+                      v !== view &&
+                      ["chest", "abdomen", "upper_back", "lower_back"].includes(
+                        region,
+                      )
+                    )
+                      setRegion(
+                        v === "front"
+                          ? region === "lower_back"
+                            ? "abdomen"
+                            : "chest"
+                          : region === "abdomen"
+                            ? "lower_back"
+                            : "upper_back",
+                      );
+                  }}
                 />
               ))}
-          </View>
-          <Text style={s.subtitle}>Como é a dor?</Text>
-          <View style={s.row}>
-            {[
-              "Pontada",
-              "Queimação",
-              "Latejante",
-              "Aperto / peso",
-              "Formigamento",
-              "Constante",
-            ].map((t) => (
-              <Button
-                key={t}
-                label={(type === t ? "✓ " : "") + t}
-                tone={type === t ? "blue" : "light"}
-                onPress={() => setType(t)}
-              />
-            ))}
-          </View>
-          <Text style={s.subtitle}>Quanto está doendo? {intensity}/10</Text>
-          <Text style={s.muted}>
-            1–2 leve; 3–4 média; 5–6 forte; 7–8 muito forte; 9–10 máxima. O
-            registro não é um diagnóstico.
-          </Text>
-          <View style={s.row}>
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <Button
-                key={n}
-                label={String(n) + (intensity === n ? " ✓" : "")}
-                tone={intensity === n ? "blue" : "light"}
-                onPress={() => setIntensity(n)}
-              />
-            ))}
-          </View>
-          <Text style={s.subtitle}>Desde quando?</Text>
-          {["Hoje", "Alguns dias", "Mais de 1 semana"].map((o) => (
-            <Button
-              key={o}
-              label={(onset === o ? "✓ " : "") + o}
-              tone={onset === o ? "blue" : "light"}
-              onPress={() => setOnset(o)}
+            </View>
+            <Text style={s.muted}>
+              Direita e esquerda são sempre os lados da pessoa que sente a dor.
+            </Text>
+            <BodyMap
+              view={view}
+              region={region}
+              onSelect={setRegion}
+              disabled={busy}
             />
-          ))}
-          <Form
-            fields={[{ key: "notes", label: "Observação", optional: true }]}
-            submit="Salvar registro de dor"
-            onCancel={() => setCreating(false)}
-            onSave={async (v) => {
-              const r = await api(path, "POST", {
-                view,
-                region,
-                type,
-                intensity,
-                onset,
-                notes: v.notes || "",
-              });
-              setMessage(r.message);
-              setCreating(false);
-              state.reload();
-            }}
-          />
-        </>
-      ) : (
-        <>
-          <Loading state={state} />
-          {state.data?.items.length === 0 && (
-            <Text style={s.text}>Nenhuma dor registrada.</Text>
-          )}
-          {!!state.data?.items.length && (
-            <Card>
-              <Text style={s.subtitle}>Evolução da intensidade</Text>
-              <Text style={s.muted}>
-                Últimos 7 registros, do mais antigo ao mais recente. Cada barra
-                representa um registro real.
-              </Text>
-              {state.data.items
-                .slice(0, 7)
-                .reverse()
-                .map((p: any) => (
-                  <View
-                    key={p.id}
-                    accessibilityLabel={`${dateTime(p.created_at)}: intensidade ${p.intensity} de 10`}
-                  >
-                    <Text style={s.muted}>
-                      {dateTime(p.created_at)} · {p.intensity}/10
-                    </Text>
-                    <View
-                      style={{
-                        height: 16,
-                        borderRadius: 8,
-                        width: `${Number(p.intensity) * 10}%`,
-                        backgroundColor:
-                          Number(p.intensity) >= 7 ? colors.red : colors.blue,
-                      }}
-                    />
-                  </View>
-                ))}
-            </Card>
-          )}
-          {state.data?.items.map((p: any) => (
-            <Card key={p.id}>
-              <Text style={s.subtitle}>
-                {p.intensity}/10 · {regions[p.region]}
-              </Text>
-              <Text style={s.text}>
-                {p.type} · {p.view === "front" ? "Frente" : "Costas"}
-                {"\n"}Início: {p.onset}
-                {"\n"}
-                {dateTime(p.created_at)}
-                {p.notes ? "\n" + p.notes : ""}
-              </Text>
-              {p.views.length ? (
-                p.views.map((v: any) => (
-                  <Text key={v.caregiver_id} style={s.muted}>
-                    Visto por {v.name} em {dateTime(v.viewed_at)}
-                  </Text>
-                ))
-              ) : (
-                <Text style={s.muted}>
-                  Ainda sem visualizações de cuidadores.
-                </Text>
-              )}
-              {user.role === "caregiver" &&
-                !p.views.some(
-                  (v: any) => Number(v.caregiver_id) === Number(user.id),
-                ) && (
+            <Text style={s.subtitle}>Local: {regions[region]}</Text>
+            <Text style={s.muted}>
+              Também é possível selecionar pela lista:
+            </Text>
+            <View style={s.row}>
+              {Object.entries(regions)
+                .filter(([k]) =>
+                  view === "front"
+                    ? !["upper_back", "lower_back"].includes(k)
+                    : !["chest", "abdomen"].includes(k),
+                )
+                .map(([k, l]) => (
                   <Button
-                    label="Marcar como visto"
-                    disabled={busy}
-                    onPress={() => seen(p.id)}
+                    key={k}
+                    label={(region === k ? "✓ " : "") + l}
+                    tone={region === k ? "blue" : "light"}
+                    onPress={() => setRegion(k)}
                   />
+                ))}
+            </View>
+            <Text style={s.subtitle}>Como é a dor?</Text>
+            <View style={s.row}>
+              {[
+                "Pontada",
+                "Queimação",
+                "Latejante",
+                "Aperto / peso",
+                "Formigamento",
+                "Constante",
+              ].map((t) => (
+                <Button
+                  key={t}
+                  label={(type === t ? "✓ " : "") + t}
+                  tone={type === t ? "blue" : "light"}
+                  onPress={() => setType(t)}
+                />
+              ))}
+            </View>
+            <Text style={s.subtitle}>Quanto está doendo? {intensity}/10</Text>
+            <Text style={s.muted}>
+              1–2 leve; 3–4 média; 5–6 forte; 7–8 muito forte; 9–10 máxima. O
+              registro não é um diagnóstico.
+            </Text>
+            <View style={s.row}>
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                <Button
+                  key={n}
+                  label={String(n) + (intensity === n ? " ✓" : "")}
+                  tone={intensity === n ? "blue" : "light"}
+                  onPress={() => setIntensity(n)}
+                />
+              ))}
+            </View>
+            <Text style={s.subtitle}>Desde quando?</Text>
+            {["Hoje", "Alguns dias", "Mais de 1 semana"].map((o) => (
+              <Button
+                key={o}
+                label={(onset === o ? "✓ " : "") + o}
+                tone={onset === o ? "blue" : "light"}
+                onPress={() => setOnset(o)}
+              />
+            ))}
+            <Form
+              fields={[{ key: "notes", label: "Observação", optional: true }]}
+              submit="Salvar registro de dor"
+              onBusyChange={setBusy}
+              onCancel={() => setCreating(false)}
+              onSave={async (v) => {
+                const r = await api(path, "POST", {
+                  view,
+                  region,
+                  type,
+                  intensity,
+                  onset,
+                  notes: v.notes || "",
+                });
+                setMessage(r.message);
+                setCreating(false);
+                state.reload();
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <Loading state={state} />
+            {state.data?.items.length === 0 && (
+              <Text style={s.text}>Nenhuma dor registrada.</Text>
+            )}
+            {!!state.data?.items.length && (
+              <Card>
+                <Text style={s.subtitle}>Evolução da intensidade</Text>
+                <Text style={s.muted}>
+                  Últimos 7 registros, do mais antigo ao mais recente. Cada
+                  barra representa um registro real.
+                </Text>
+                {state.data.items
+                  .slice(0, 7)
+                  .reverse()
+                  .map((p: any) => (
+                    <View
+                      key={p.id}
+                      accessibilityLabel={`${dateTime(p.created_at)}: intensidade ${p.intensity} de 10`}
+                    >
+                      <Text style={s.muted}>
+                        {dateTime(p.created_at)} · {p.intensity}/10
+                      </Text>
+                      <View
+                        style={{
+                          height: 16,
+                          borderRadius: 8,
+                          width: `${Number(p.intensity) * 10}%`,
+                          backgroundColor:
+                            Number(p.intensity) >= 7 ? colors.red : colors.blue,
+                        }}
+                      />
+                    </View>
+                  ))}
+              </Card>
+            )}
+            {state.data?.items.map((p: any) => (
+              <Card key={p.id}>
+                <Text style={s.subtitle}>
+                  {p.intensity}/10 · {regions[p.region]}
+                </Text>
+                <Text style={s.text}>
+                  {p.type} · {p.view === "front" ? "Frente" : "Costas"}
+                  {"\n"}Início: {p.onset}
+                  {"\n"}
+                  {dateTime(p.created_at)}
+                  {p.notes ? "\n" + p.notes : ""}
+                </Text>
+                {p.views.length ? (
+                  p.views.map((v: any) => (
+                    <Text key={v.caregiver_id} style={s.muted}>
+                      Visto por {v.name} em {dateTime(v.viewed_at)}
+                    </Text>
+                  ))
+                ) : (
+                  <Text style={s.muted}>
+                    Ainda sem visualizações de cuidadores.
+                  </Text>
                 )}
-            </Card>
-          ))}
-        </>
-      )}
-    </>
+                {user.role === "caregiver" &&
+                  !p.views.some(
+                    (v: any) => Number(v.caregiver_id) === Number(user.id),
+                  ) && (
+                    <Button
+                      label="Marcar como visto"
+                      disabled={busy}
+                      onPress={() => seen(p.id)}
+                    />
+                  )}
+              </Card>
+            ))}
+          </>
+        )}
+      </>
+    </FormBusy.Provider>
   );
 }
 function Links({
   user,
   onSelect,
+  onRemove,
 }: {
   user: User;
   onSelect: (id: number) => void;
+  onRemove: (id: number) => void;
 }) {
   const state = useData("/links"),
     [code, setCode] = useState<any>(null),
@@ -1042,7 +1163,7 @@ function Links({
                   try {
                     await api(`/links/${u.id}`, "DELETE");
                     state.reload();
-                    onSelect(0);
+                    onRemove(Number(u.id));
                     setMessage("Vínculo removido.");
                   } catch (e) {
                     setMessage((e as Error).message);
@@ -1058,7 +1179,13 @@ function Links({
     </>
   );
 }
-function SOS({ elder }: { elder: number }) {
+function SOS({
+  elder,
+  navigate,
+}: {
+  elder: number;
+  navigate: (tab: string) => void;
+}) {
   const state = useData(`/elders/${elder}/contacts`),
     [message, setMessage] = useState("");
   const contact = state.data?.items.find(
@@ -1077,7 +1204,9 @@ function SOS({ elder }: { elder: number }) {
           <Text style={s.subtitle}>
             {contact.name} ({contact.relationship})
           </Text>
-          <Text style={s.text}>{contact.phone}</Text>
+          <Text selectable style={s.text}>
+            {contact.phone}
+          </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`SOS: abrir discador para ${contact.name}`}
@@ -1085,16 +1214,7 @@ function SOS({ elder }: { elder: number }) {
               confirmAction(
                 `Abrir o discador para ${contact.name}?`,
                 async () => {
-                  try {
-                    await Linking.openURL(`tel:${contact.phone}`);
-                    setMessage(
-                      "Solicitamos a abertura do discador. Não há confirmação de ligação ou de recebimento.",
-                    );
-                  } catch {
-                    setMessage(
-                      "Este dispositivo não conseguiu abrir o discador. Use o número exibido.",
-                    );
-                  }
+                  setMessage(await openDialer(contact.phone));
                 },
               )
             }
@@ -1114,9 +1234,15 @@ function SOS({ elder }: { elder: number }) {
       ) : (
         !state.loading &&
         !state.error && (
-          <Text style={s.text}>
-            Não há contato principal. Cadastre ou escolha um em Contatos.
-          </Text>
+          <View style={{ gap: 12 }}>
+            <Text style={s.text}>
+              Não há contato principal. Cadastre ou escolha um em Contatos.
+            </Text>
+            <Button
+              label="Escolher ou cadastrar contato"
+              onPress={() => navigate("Contatos")}
+            />
+          </View>
         )
       )}
       {!!message && (
@@ -1185,7 +1311,9 @@ export default function App() {
     [elder, setElder] = useState(0),
     [sessionMessage, setSessionMessage] = useState(""),
     [logoutBusy, setLogoutBusy] = useState(false);
+  const sessionGeneration = useRef(0);
   function loggedIn(u: User) {
+    sessionGeneration.current++;
     setUser(u);
     setElder(u.role === "elder" ? Number(u.id) : 0);
     setTab(u.role === "elder" ? "Início" : "Vínculos");
@@ -1214,18 +1342,50 @@ export default function App() {
   async function logout() {
     if (logoutBusy) return;
     setLogoutBusy(true);
-    try {
-      await api("/auth/logout", "POST");
-      await saveToken(null);
-      setUser(null);
-      setElder(0);
-      setSessionMessage("Você saiu da conta.");
-    } catch (e) {
-      setSessionMessage((e as Error).message);
-    } finally {
-      setLogoutBusy(false);
-    }
+    const generation = ++sessionGeneration.current;
+    const revocation = api("/auth/logout", "POST").then(
+      () => true,
+      () => false,
+    );
+    const clearing = saveToken(null).then(
+      () => true,
+      () => false,
+    );
+    setUser(null);
+    setElder(0);
+    setSessionMessage(
+      "Você saiu neste dispositivo. Revogando sessão no servidor…",
+    );
+    setLogoutBusy(false);
+    const [revoked, cleared] = await Promise.all([revocation, clearing]);
+    if (generation === sessionGeneration.current)
+      setSessionMessage(
+        (revoked
+          ? "Você saiu da conta."
+          : "Você saiu neste dispositivo. Não foi possível revogar a sessão no servidor; ela permanecerá válida até expirar.") +
+          (cleared ? "" : " Não foi possível limpar o armazenamento seguro."),
+      );
   }
+
+  const scroll = useRef<ScrollView>(null);
+  useEffect(() => {
+    scroll.current?.scrollTo({ y: 0, animated: false });
+  }, [tab, elder]);
+  useEffect(() => {
+    const handler = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (
+        ["Medicamentos", "Consultas", "Contatos", "Dores", "Vínculos"].includes(
+          tab,
+        )
+      ) {
+        setTab("Cuidados");
+        return true;
+      }
+      return false;
+    });
+    return () => handler.remove();
+  }, [tab]);
+
   const tabs = ["Início", "Assistente", "SOS", "Cuidados"];
   let screen: React.ReactNode = null;
   if (user) {
@@ -1233,6 +1393,9 @@ export default function App() {
       screen = (
         <Links
           user={user}
+          onRemove={(id) => {
+            if (user.role === "caregiver" && elder === id) setElder(0);
+          }}
           onSelect={(id) => {
             setElder(id);
             if (id) setTab("Início");
@@ -1269,7 +1432,8 @@ export default function App() {
       );
     else if (tab === "Início")
       screen = <Home key={elder} elder={elder} user={user} navigate={setTab} />;
-    else if (tab === "SOS") screen = <SOS key={elder} elder={elder} />;
+    else if (tab === "SOS")
+      screen = <SOS key={elder} elder={elder} navigate={setTab} />;
     else if (tab === "Dores")
       screen = <Pains key={elder} elder={elder} user={user} />;
     else
@@ -1297,6 +1461,7 @@ export default function App() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <ScrollView
+            ref={scroll}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={s.content}
           >
@@ -1336,7 +1501,29 @@ export default function App() {
               <Pressable
                 key={t}
                 accessibilityRole="tab"
-                accessibilityState={{ selected: tab === t }}
+                aria-selected={
+                  tab === t ||
+                  (t === "Cuidados" &&
+                    [
+                      "Medicamentos",
+                      "Consultas",
+                      "Contatos",
+                      "Dores",
+                      "Vínculos",
+                    ].includes(tab))
+                }
+                accessibilityState={{
+                  selected:
+                    tab === t ||
+                    (t === "Cuidados" &&
+                      [
+                        "Medicamentos",
+                        "Consultas",
+                        "Contatos",
+                        "Dores",
+                        "Vínculos",
+                      ].includes(tab)),
+                }}
                 accessibilityLabel={t}
                 onPress={() => setTab(t)}
                 style={{
@@ -1353,17 +1540,24 @@ export default function App() {
                     color: t === "SOS" ? colors.red : colors.blue,
                   }}
                 >
-                  {
-                    { Início: "⌂", Assistente: "☏", SOS: "⚠", Cuidados: "♧" }[
-                      t
-                    ]
-                  }
+                  {{ Início: "⌂", Assistente: "☏", SOS: "⚠", Cuidados: "♧" }[t]}
                 </Text>
                 <Text
                   style={{
                     fontSize: 14,
                     color: t === "SOS" ? colors.red : colors.dark,
-                    fontWeight: tab === t ? "700" : "400",
+                    fontWeight:
+                      tab === t ||
+                      (t === "Cuidados" &&
+                        [
+                          "Medicamentos",
+                          "Consultas",
+                          "Contatos",
+                          "Dores",
+                          "Vínculos",
+                        ].includes(tab))
+                        ? "700"
+                        : "400",
                   }}
                 >
                   {t}

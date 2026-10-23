@@ -2,7 +2,7 @@
 
 JSON UTF-8. URL de desenvolvimento: API iniciada em `backend` com `php -S 0.0.0.0:8000 -t public public/index.php`. Envie `Content-Type: application/json` e, após login, `Authorization: Bearer <token>`. IDs retornados pelo PDO podem ser números ou strings numéricas. O cliente não determina a identidade ou perfil efetivo.
 
-Datas de calendário e de doses: `YYYY-MM-DD`, fuso America/Sao_Paulo. Horários: `HH:MM`. Entrada de consulta: `YYYY-MM-DDTHH:MM` **em São Paulo**; saída de timestamps: `YYYY-MM-DD HH:MM:SS` **UTC**. O cliente converte timestamps para São Paulo.
+Datas de calendário e de doses: `YYYY-MM-DD`, fuso America/Sao_Paulo. Horários: `HH:MM`. Entrada de consulta: `YYYY-MM-DDTHH:MM` **em São Paulo**; saída de timestamps: `YYYY-MM-DD HH:MM:SS` **UTC**. O cliente converte timestamps para São Paulo. A API também normaliza datas `DD/MM/AAAA` e consultas `DD/MM/AAAA HH:MM`; a interpretação de consultas usa explicitamente America/Sao_Paulo, independentemente do fuso do processo.
 
 | Método e rota | Corpo / resultado | Permissão |
 |---|---|---|
@@ -70,11 +70,13 @@ Consulta: `{"doctor":"Dra. Fictícia","specialty":"Cardiologia","scheduled_at":"
 
 Dor: `{"view":"front","region":"left_knee","type":"Pontada","intensity":8,"onset":"Hoje","notes":"Após caminhar"}`.
 
-`view`: front/back. `region`: head, chest, abdomen, upper_back, lower_back, left/right_shoulder, left/right_arm, left/right_hand, left/right_hip, left/right_leg, left/right_knee, left/right_foot (expanda left/right em duas opções). Lados anatômicos da pessoa, com imagem de costas espelhada. `type`: Pontada, Queimação, Latejante, Aperto / peso, Formigamento, Constante. `onset`: Hoje, Alguns dias, Mais de 1 semana. `notes` opcional, até 1000 bytes. Intensidade inteira de 1 a 10: 1–2 leve, 3–4 média, 5–6 forte, 7–8 muito forte, 9–10 máxima. Não é diagnóstico. O gráfico mostra os últimos sete registros reais, não médias ou dias sem dados.
+`view`: front/back. `region`: head, chest, abdomen, upper_back, lower_back, left/right_shoulder, left/right_arm, left/right_hand, left/right_hip, left/right_leg, left/right_knee, left/right_foot (expanda left/right em duas opções). Lados anatômicos da pessoa, com imagem de costas espelhada. `type`: Pontada, Queimação, Latejante, Aperto / peso, Formigamento, Constante. `onset`: Hoje, Alguns dias, Mais de 1 semana. `notes` opcional, até 1000 caracteres Unicode. Intensidade inteira de 1 a 10: 1–2 leve, 3–4 média, 5–6 forte, 7–8 muito forte, 9–10 máxima. Não é diagnóstico. O gráfico mostra os últimos sete registros reais, não médias ou dias sem dados.
 
 ## Erros e segurança
 
-Erros têm formato `{"error":"Mensagem legível"}`. 400 JSON inválido; 401 credenciais/sessão inválidas ou expiradas; 403 perfil/vínculo insuficiente; 404 rota/registro não encontrado; 405 método não suportado; 409 telefone duplicado; 413 corpo acima de 16 KiB; 422 campos/código inválidos; 429 limite de tentativas; 500 erro interno sem SQL/credenciais.
+Erros têm formato `{"error":"Mensagem legível"}`. 400 JSON inválido; 401 credenciais/sessão inválidas ou expiradas; 403 perfil/vínculo insuficiente; 404 rota/registro não encontrado; 405 método não suportado; 409 telefone duplicado ou tentativa de editar medicamento desativado/consulta cancelada (atualize a lista); 413 corpo acima de 16 KiB; 422 campos/código inválidos; 429 limite de tentativas; 500 erro interno sem SQL/credenciais.
+
+Limites de texto contam caracteres Unicode, incluindo acentos. Senhas mantêm o limite de 72 bytes do algoritmo, com mínimo de 8 caracteres no cadastro.
 
 Senhas com password_hash/verify, tokens aleatórios de 256 bits armazenados apenas por SHA-256, expiração configurável em SESSION_HOURS (padrão 168 h) e logout revogável. Códigos aleatórios de 48 bits, armazenados por hash, uso único com bloqueio transacional e expiração de dez minutos. Gerar novo código revoga os anteriores não usados. Um código compartilhado **autoriza diretamente** o cuidador; não há aprovação pendente ou “cuidador principal” privilegiado.
 

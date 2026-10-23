@@ -10,9 +10,16 @@ final class Api {
         $q=$this->db->prepare($sql); $q->execute($params); return $q;
     }
     private function fail(int $status,string $message): never { throw new ApiError($status,$message); }
+    private function label(string $key): string {
+        return ['name'=>'nome','phone'=>'telefone','password'=>'senha','birth_date'=>'nascimento','role'=>'perfil','relationship'=>'parentesco','code'=>'código de vinculação','dosage'=>'dosagem','start_date'=>'início do uso','end_date'=>'fim do uso','doctor'=>'médico(a)','specialty'=>'especialidade','location'=>'local','scheduled_at'=>'data e hora da consulta','date'=>'data','status'=>'situação','view'=>'vista do corpo','region'=>'região do corpo','type'=>'tipo de dor','onset'=>'início da dor'][$key] ?? 'campo';
+    }
+    private function length(string $value): int {
+        $count=preg_match_all('/./us',$value);
+        return $count===false ? PHP_INT_MAX : $count;
+    }
     private function text(array $data,string $key,int $max=100): string {
         $value=$data[$key] ?? null;
-        if (!is_string($value) || trim($value)==='' || strlen(trim($value))>$max) $this->fail(422,"Preencha corretamente: $key.");
+        if (!is_string($value) || trim($value)==='' || ($key==='password' ? strlen(trim($value)) : $this->length(trim($value)))>$max) $this->fail(422,"Preencha corretamente: ".$this->label($key).".");
         return trim($value);
     }
     private function phone(array $data,string $key='phone'): string {
@@ -21,13 +28,15 @@ final class Api {
         return $v;
     }
     private function date(array $data,string $key): string {
-        $v=$this->text($data,$key,10); $d=DateTimeImmutable::createFromFormat('!Y-m-d',$v);
-        if (!$d || $d->format('Y-m-d')!==$v) $this->fail(422,"Data inválida: $key. Use AAAA-MM-DD.");
+        $v=$this->text($data,$key,10);
+        $v=preg_replace('#^(\d{2})/(\d{2})/(\d{4})$#','$3-$2-$1',$v);
+        $d=DateTimeImmutable::createFromFormat('!Y-m-d',$v);
+        if (!$d || substr($v,0,4)==='0000' || $d->format('Y-m-d')!==$v) $this->fail(422,"Data inválida: ".$this->label($key).". Use AAAA-MM-DD.");
         return $v;
     }
     private function enum(array $data,string $key,array $values): string {
         $v=$this->text($data,$key,100);
-        if (!in_array($v,$values,true)) $this->fail(422,"Opção inválida: $key.");
+        if (!in_array($v,$values,true)) $this->fail(422,"Opção inválida: ".$this->label($key).".");
         return $v;
     }
     private function role(string $role): void { if ($this->user['role']!==$role) $this->fail(403,'Seu perfil não pode realizar esta operação.'); }
@@ -88,6 +97,7 @@ final class Api {
         if ($path==='/links/redeem' && $method==='POST') {
             $this->role('caregiver'); $this->rate('redeem:user:'.$this->user['id'],10); $this->rate('redeem:ip:'.$ip,30);
             $code=strtoupper($this->text($data,'code',12));
+            if (!preg_match('/^[A-F0-9]{12}$/',$code)) $this->fail(422,'Código de vinculação deve ter 12 caracteres hexadecimais.');
             return $this->transaction(function () use ($code) {
                 $row=$this->query('SELECT * FROM link_codes WHERE code_hash=? AND used_at IS NULL AND revoked_at IS NULL AND expires_at>UTC_TIMESTAMP() FOR UPDATE',[hash('sha256',$code)])->fetch();
                 if (!$row) $this->fail(422,'Código inválido, expirado, revogado ou já utilizado.');
@@ -111,9 +121,9 @@ final class Api {
     private function register(array $data,string $ip): array {
         $this->rate('register:'.$ip,20);
         $role=$this->enum($data,'role',['elder','caregiver']); $name=$this->text($data,'name'); $birth=$this->date($data,'birth_date');
-        if ($birth>date('Y-m-d') || $birth<'1900-01-01') $this->fail(422,'Data de nascimento inválida.');
+        if ($birth>(new DateTimeImmutable('now',new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d') || $birth<'1900-01-01') $this->fail(422,'Data de nascimento inválida.');
         $phone=$this->phone($data); $password=$this->text($data,'password',72);
-        if (strlen($password)<8) $this->fail(422,'A senha deve ter de 8 a 72 caracteres.');
+        if ($this->length($password)<8) $this->fail(422,'A senha deve ter ao menos 8 caracteres e no máximo 72 bytes.');
         $contact=null;
         if ($role==='elder') {
             if (!isset($data['emergency_contact']) || !is_array($data['emergency_contact'])) $this->fail(422,'Informe o contato de emergência.');
@@ -145,7 +155,7 @@ final class Api {
             return ['items'=>$items];
         }
         $this->role('caregiver');
-        if ($id) $this->item('medications',$id,$elder);
+        if ($id) { $row=$this->item('medications',$id,$elder); if ($method==='PATCH' && !(int)$row['active']) $this->fail(409,'Medicamento desativado. Atualize a lista.'); }
         if ($method==='DELETE' && $id) {
             $this->query('UPDATE medications SET active=0 WHERE id=?',[$id]); $this->activity($elder,'medication_deactivated'); return ['message'=>'Medicamento desativado; histórico preservado.'];
         }
@@ -157,6 +167,7 @@ final class Api {
         foreach($times as $time) if (!is_string($time)||!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)) $this->fail(422,'Horário inválido. Use HH:MM.');
         if (count(array_unique($times))!==count($times)) $this->fail(422,'Não repita horários.');
         return $this->transaction(function() use($id,$elder,$name,$dosage,$start,$end,$times,$method) {
+            if ($id && !(int)$this->query('SELECT active FROM medications WHERE id=? AND elder_id=? FOR UPDATE',[$id,$elder])->fetchColumn()) $this->fail(409,'Medicamento desativado. Atualize a lista.');
             if ($id) $this->query('UPDATE medications SET name=?,dosage=?,start_date=?,end_date=? WHERE id=?',[$name,$dosage,$start,$end,$id]);
             else { $this->query('INSERT INTO medications(elder_id,name,dosage,start_date,end_date) VALUES(?,?,?,?,?)',[$elder,$name,$dosage,$start,$end]); $id=(int)$this->db->lastInsertId(); }
             $this->query('UPDATE medication_times SET active=0 WHERE medication_id=?',[$id]);
@@ -166,7 +177,7 @@ final class Api {
     }
     private function dose(int $elder,int $timeId,array $data): array {
         $this->role('elder'); $date=$this->date($data,'date'); $status=$this->enum($data,'status',['taken','pending']);
-        if ($date!==date('Y-m-d')) $this->fail(422,'Registre somente doses de hoje.');
+        if ($date!==(new DateTimeImmutable('now',new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d')) $this->fail(422,'Registre somente doses de hoje.');
         return $this->transaction(function() use($elder,$timeId,$date,$status) {
             $t=$this->query('SELECT t.id FROM medication_times t JOIN medications m ON m.id=t.medication_id WHERE t.id=? AND m.elder_id=? AND m.active=1 AND t.active=1 AND ? BETWEEN m.start_date AND m.end_date FOR UPDATE',[$timeId,$elder,$date])->fetch();
             if (!$t) $this->fail(404,'Dose não prevista para esta data.');
@@ -177,16 +188,20 @@ final class Api {
     }
     private function appointments(string $method,int $elder,int $id,array $data): array {
         if ($method==='GET') return ['items'=>$id?[$this->item('appointments',$id,$elder)]:$this->query('SELECT * FROM appointments WHERE elder_id=? ORDER BY scheduled_at',[$elder])->fetchAll()];
-        $this->role('caregiver'); if ($id) $this->item('appointments',$id,$elder);
+        $this->role('caregiver'); if ($id) { $row=$this->item('appointments',$id,$elder); if ($method==='PATCH' && (int)$row['cancelled']) $this->fail(409,'Consulta cancelada. Atualize a lista.'); }
         if ($method==='DELETE'&&$id) { $this->query('UPDATE appointments SET cancelled=1 WHERE id=?',[$id]); $this->activity($elder,'appointment_cancelled'); return ['message'=>'Consulta cancelada.']; }
         if (!(($method==='POST'&&!$id)||($method==='PATCH'&&$id))) $this->fail(405,'Método não permitido.');
         $doctor=$this->text($data,'doctor'); $specialty=$this->text($data,'specialty'); $location=$this->text($data,'location',200); $at=$this->text($data,'scheduled_at',16);
-        $d=DateTimeImmutable::createFromFormat('!Y-m-d\TH:i',$at);
-        if (!$d||$d->format('Y-m-d\TH:i')!==$at) $this->fail(422,'Data/hora inválida. Use AAAA-MM-DDTHH:MM no fuso de São Paulo.');
+        $at=preg_replace('#^(\d{2})/(\d{2})/(\d{4})[ T]#','$3-$2-$1T',$at);
+        $d=DateTimeImmutable::createFromFormat('!Y-m-d\TH:i',$at,new DateTimeZone('America/Sao_Paulo'));
+        if (!$d||substr($at,0,4)==='0000'||$d->format('Y-m-d\TH:i')!==$at) $this->fail(422,'Data/hora inválida. Use AAAA-MM-DDTHH:MM no fuso de São Paulo.');
         $utc=$d->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-        if ($id) $this->query('UPDATE appointments SET doctor=?,specialty=?,location=?,scheduled_at=? WHERE id=?',[$doctor,$specialty,$location,$utc,$id]);
-        else { $this->query('INSERT INTO appointments(elder_id,doctor,specialty,location,scheduled_at) VALUES(?,?,?,?,?)',[$elder,$doctor,$specialty,$location,$utc]); $id=(int)$this->db->lastInsertId(); http_response_code(201); }
-        $this->activity($elder,'appointment_saved'); return ['id'=>$id,'message'=>'Consulta salva.'];
+        return $this->transaction(function() use($id,$elder,$doctor,$specialty,$location,$utc) {
+            if ($id && (int)$this->query('SELECT cancelled FROM appointments WHERE id=? AND elder_id=? FOR UPDATE',[$id,$elder])->fetchColumn()) $this->fail(409,'Consulta cancelada. Atualize a lista.');
+            if ($id) $this->query('UPDATE appointments SET doctor=?,specialty=?,location=?,scheduled_at=? WHERE id=?',[$doctor,$specialty,$location,$utc,$id]);
+            else { $this->query('INSERT INTO appointments(elder_id,doctor,specialty,location,scheduled_at) VALUES(?,?,?,?,?)',[$elder,$doctor,$specialty,$location,$utc]); $id=(int)$this->db->lastInsertId(); http_response_code(201); }
+            $this->activity($elder,'appointment_saved'); return ['id'=>$id,'message'=>'Consulta salva.'];
+        });
     }
     private function contacts(string $method,int $elder,int $id,array $data): array {
         if ($method==='GET') return ['items'=>$id?[$this->item('contacts',$id,$elder)]:$this->query('SELECT * FROM contacts WHERE elder_id=? ORDER BY is_primary DESC,id',[$elder])->fetchAll()];
@@ -194,7 +209,7 @@ final class Api {
         if ($method==='DELETE'&&$id) { $this->query('DELETE FROM contacts WHERE id=?',[$id]); $this->activity($elder,'contact_deleted'); return ['message'=>'Contato excluído. Se era principal, escolha outro contato para SOS.']; }
         if (!(($method==='POST'&&!$id)||($method==='PATCH'&&$id))) $this->fail(405,'Método não permitido.');
         $name=$this->text($data,'name'); $phone=$this->phone($data); $rel=$this->text($data,'relationship',60);
-        if (isset($data['is_primary'])&&!is_bool($data['is_primary'])) $this->fail(422,'is_primary deve ser booleano.');
+        if (isset($data['is_primary'])&&!is_bool($data['is_primary'])) $this->fail(422,'Contato principal deve ser verdadeiro ou falso.');
         $primary=($data['is_primary']??false)?1:0;
         return $this->transaction(function() use($elder,$id,$name,$phone,$rel,$primary,$method) {
             $this->query('SELECT id FROM users WHERE id=? FOR UPDATE',[$elder]);
@@ -224,16 +239,16 @@ final class Api {
         if (!is_int($intensity)||$intensity<1||$intensity>10) $this->fail(422,'Intensidade deve ser um inteiro de 1 a 10.');
         $onset=$this->enum($data,'onset',['Hoje','Alguns dias','Mais de 1 semana']);
         $notes=$data['notes']??'';
-        if (!is_string($notes)||strlen($notes)>1000) $this->fail(422,'Observação deve ter até 1000 caracteres.');
+        if (!is_string($notes)||$this->length($notes)>1000) $this->fail(422,'Observação deve ter até 1000 caracteres.');
         $this->query('INSERT INTO pains(elder_id,view,region,type,intensity,onset,notes) VALUES(?,?,?,?,?,?,?)',[$elder,$view,$region,$type,$intensity,$onset,$notes]);
         $id=(int)$this->db->lastInsertId(); $this->activity($elder,'pain_recorded'); http_response_code(201);
         return ['id'=>$id,'message'=>'Dor registrada e disponível aos cuidadores vinculados. Nenhuma notificação remota foi enviada.'];
     }
     private function dashboard(int $elder): array {
-        $today=date('Y-m-d'); $start=(new DateTimeImmutable($today))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-        $end=(new DateTimeImmutable($today))->modify('+1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $today=(new DateTimeImmutable('now',new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d'); $start=(new DateTimeImmutable($today,new DateTimeZone('America/Sao_Paulo')))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $end=(new DateTimeImmutable($today,new DateTimeZone('America/Sao_Paulo')))->modify('+1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         return [
-            'date'=>$today,'timezone'=>date_default_timezone_get(),
+            'date'=>$today,'timezone'=>'America/Sao_Paulo',
             'elder'=>$this->query('SELECT id,name,phone FROM users WHERE id=?',[$elder])->fetch(),
             'last_activity'=>$this->query('SELECT action,created_at FROM activities WHERE elder_id=? AND actor_id=? ORDER BY id DESC LIMIT 1',[$elder,$elder])->fetch() ?: null,
             'doses'=>$this->query("SELECT t.id AS time_id,m.id AS medication_id,m.name,m.dosage,TIME_FORMAT(t.time,'%H:%i') AS time,COALESCE(d.status,'unconfirmed') AS status,d.recorded_at FROM medications m JOIN medication_times t ON t.medication_id=m.id LEFT JOIN dose_records d ON d.time_id=t.id AND d.dose_date=? WHERE m.elder_id=? AND m.active=1 AND t.active=1 AND ? BETWEEN m.start_date AND m.end_date ORDER BY t.time,m.id",[$today,$elder,$today])->fetchAll(),
