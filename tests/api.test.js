@@ -99,14 +99,17 @@ test('sessão expira, bloqueio de origem, JSON e headers de segurança', async t
   clock = new Date(clock.getTime() + 8 * 86400000); await c('/api/me', 'GET', undefined, 401);
 });
 test('dados persistem após reinício e senhas não são armazenadas em texto', async t => {
-  const dir = await mkdtemp(join(tmpdir(), 'cuidali-')); t.after(() => rm(dir, { recursive: true, force: true })); const databasePath = join(dir, 'test.sqlite');
+  const dir = await mkdtemp(join(tmpdir(), 'cuidali-')); const databasePath = join(dir, 'test.sqlite');
+  let second;
+  // Windows locks open SQLite files: close the app before removing its directory.
+  t.after(async () => { try { if (second) await second.close(); } finally { await rm(dir, { recursive: true, force: true }); } });
   const first = await start({ databasePath }); const c = first.client();
   try {
     await c('/api/register', 'POST', caregiver, 201); await c('/api/seniors', 'POST', seniorData, 201);
     const saved = first.db.prepare('SELECT password_hash FROM users').get().password_hash;
     assert.notEqual(saved, caregiver.password); assert.equal(saved.includes(caregiver.password), false);
   } finally { await first.close(); }
-  const second = await start({ databasePath }); t.after(second.close); const d = second.client();
+  second = await start({ databasePath }); const d = second.client();
   await d('/api/login', 'POST', caregiver); assert.equal((await d('/api/seniors')).seniors[0].name, 'Maria');
 });
 test('alertas sem contato continuam úteis e eventos avisam outras sessões sem dados pessoais', async t => {

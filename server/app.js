@@ -208,7 +208,7 @@ export function createApp({ databasePath = process.env.DATABASE_PATH || './data/
         publish(); return json({ ok: true }, method === 'POST' ? 201 : 200);
       }
       if (method !== 'GET' && method !== 'HEAD') throw new AppError(405, 'Método não permitido.');
-      const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'], '/sw.js': ['sw.js', 'text/javascript'], '/icon.svg': ['icon.svg', 'image/svg+xml'] };
+      const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'], '/sw.js': ['sw.js', 'text/javascript'], '/icon.svg': ['icon.svg', 'image/svg+xml'], '/care-illustration.svg': ['care-illustration.svg', 'image/svg+xml'] };
       if (!files[path]) throw new AppError(404, 'Página não encontrada.');
       const [file, type] = files[path]; const content = await readFile(publicDir + file);
       res.writeHead(200, { 'Content-Type': type + '; charset=utf-8' }); res.end(method === 'HEAD' ? undefined : content);

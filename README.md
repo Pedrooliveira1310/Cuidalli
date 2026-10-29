@@ -58,6 +58,14 @@ Processos precisam permanecer ativos para detectar inatividade; o monitor roda a
 
 O SOS avisa **dentro do painel**, sem SMS, WhatsApp, chamada automática ou despacho de emergência. O cuidador precisa acompanhar o painel. A ligação depende da confirmação do usuário e de telefonia disponível no aparelho. O primeiro contato cadastrado é o principal; sem contato, o alerta ainda é registrado e o app exibe a orientação de ligar 192 no Brasil.
 
+## Atualização da interface
+
+Integração do pacote de atualização do desenvolvimento: nova apresentação com ilustração SVG local, cartões e navegação redesenhados, mantendo a paleta azul original. No celular, o formulário de acesso aparece primeiro. O acesso oferece mostrar/ocultar senha e preserva o e-mail ao alternar entre entrar e cadastrar.
+
+Rascunhos do assistente são mantidos em memória por pessoa acompanhada durante navegação e atualização; são removidos ao sair. Perguntas rápidas preservam o texto ainda não enviado. O aplicativo sinaliza reconexão, indisponibilidade do servidor e ausência de internet em português.
+
+O histórico das melhorias recebidas e a validação da integração estão em [TESTES-E-MELHORIAS.md](TESTES-E-MELHORIAS.md). Capturas de referência recebidas estão em `artifacts/`.
+
 ## Testes
 
 ```sh
