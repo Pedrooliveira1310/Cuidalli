@@ -1,133 +1,250 @@
-# Cuidali
+<div align="center">
 
-**Cuidado que conecta.** Plataforma da Kannali Corp para idosos e seus familiares/cuidadores, desenvolvida para o projeto do 4º termo do SENAI “A. Jacob Lafer”.
+<img src="https://raw.githubusercontent.com/Pedrooliveira1310/Cuidalli/sprint-3/public/icon.svg" alt="Símbolo do Cuidali: coração e cuidado" width="88" height="88" />
 
-## Executar
+# CUIDALI
 
-Requer **Node.js 24+** (SQLite nativo). Sem dependências de produção, chaves externas ou serviços pagos.
+### Tecnologia que aproxima. Cuidado que acompanha.
+
+**Autonomia para a pessoa idosa. Presença para quem cuida.**
+
+[![Projeto](https://img.shields.io/badge/Kannali_Corp-Cuidali-1A365D?style=for-the-badge)](https://github.com/Pedrooliveira1310/Cuidalli)
+[![Experiência](https://img.shields.io/badge/Experiência-Web_%26_Mobile-245B92?style=for-the-badge)](#experiencia)
+[![Cuidado](https://img.shields.io/badge/Design-Acessível-297456?style=for-the-badge)](#acessibilidade)
+[![CI da sprint 3](https://github.com/Pedrooliveira1310/Cuidalli/actions/workflows/ci.yml/badge.svg?branch=sprint-3)](https://github.com/Pedrooliveira1310/Cuidalli/actions/workflows/ci.yml?query=branch%3Asprint-3)
+
+[**Conheça o projeto**](#projeto) · [**Escolha sua versão**](#versoes) · [**Execute**](#executar) · [**Explore a arquitetura**](#arquitetura) · [**Valide**](#qualidade)
+
+<sub>SENAI “A. Jacob Lafer” · Desenvolvimento de Sistemas · Santo André · 2026</sub>
+
+</div>
+
+---
+
+<a id="projeto"></a>
+
+## 01 / O cuidado começa na conexão
+
+Um remédio no horário. Uma consulta lembrada. Um contato de confiança ao alcance de um toque.
+
+O **Cuidali** transforma esses momentos em uma rotina de cuidado compartilhada entre pessoas idosas, familiares e cuidadores. A proposta combina interface acessível, dados persistentes e acompanhamento para apoiar a autonomia de quem recebe cuidado e a presença de quem acompanha.
+
+```text
+CUIDALI / CARE CONNECTION
+│
+├── AUTONOMIA  → uma rotina mais simples para a pessoa idosa
+├── PRESENÇA   → informações organizadas para quem acompanha
+└── CONFIANÇA  → acesso autorizado e histórico do cuidado
+```
+
+<a id="experiencia"></a>
+
+## 02 / Duas perspectivas. Uma rede de apoio.
+
+| Para a pessoa idosa | Para o familiar ou cuidador |
+| :--- | :--- |
+| Consultar medicamentos e compromissos | Organizar medicamentos, horários e consultas |
+| Confirmar a medicação | Acompanhar confirmações e históricos |
+| Encontrar contatos de confiança | Manter a rede de apoio atualizada |
+| Pedir ajuda pelo SOS | Acompanhar as informações autorizadas |
+| Navegar com ações grandes e linguagem clara | Selecionar a pessoa acompanhada sem misturar dados |
+
+As funcionalidades e a forma de vincular os perfis variam por versão. O mapa abaixo identifica o que está implementado em cada branch.
+
+<a id="versoes"></a>
+
+## 03 / Mapa das versões
+
+> **Um README, três branches.** Este documento é compartilhado. Os diretórios, as tecnologias e os comandos pertencem à versão indicada em cada seção.
+
+| Branch | O que você encontra | Onde começar |
+| :--- | :--- | :--- |
+| [`sprint-1`](https://github.com/Pedrooliveira1310/Cuidalli/tree/sprint-1) | Concepção, requisitos e documento original do projeto | [Documento de concepção](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-1/Kannali_Cuidali.docx) |
+| [`sprint-2`](https://github.com/Pedrooliveira1310/Cuidalli/tree/sprint-2) | Aplicativo Expo/React Native, API PHP e MySQL/MariaDB; vínculos com consentimento, doses e registros de dor | [Guia completo da sprint 2](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-2/docs/GUIA-SPRINT2.md) |
+| [`sprint-3`](https://github.com/Pedrooliveira1310/Cuidalli/tree/sprint-3) | Web/PWA, API Node.js e SQLite; SOS no painel, inatividade, assistente por texto/voz e interface redesenhada | [Guia completo da sprint 3](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-3/docs/GUIA-SPRINT3.md) |
+
+**As sprints 2 e 3 mantêm implementações distintas.** Padronizar a apresentação não unifica suas APIs, seus bancos ou suas jornadas. Não há migração automática de dados entre elas. A sprint 3 não inclui todos os recursos específicos da sprint 2, como mapa de dor e vínculos por código.
+
+<a id="arquitetura"></a>
+
+## 04 / Por dentro da conexão
+
+```mermaid
+flowchart TB
+    I["Pessoa idosa"] --> V{"Versão escolhida"}
+    C["Familiar ou cuidador"] --> V
+
+    subgraph S2["SPRINT 2 · Aplicativo mobile e web"]
+        EX["Expo + React Native + TypeScript"]
+        PHP["API REST · PHP + PDO"]
+        MYSQL[("MySQL / MariaDB")]
+        EX -->|"JSON · Bearer token"| PHP
+        PHP --> MYSQL
+    end
+
+    subgraph S3["SPRINT 3 · Aplicação web/PWA"]
+        WEB["HTML + CSS + JavaScript"]
+        NODE["API REST · Node.js 24+"]
+        SQL[("SQLite nativo")]
+        WEB -->|"JSON · Cookie de sessão"| NODE
+        NODE --> SQL
+        NODE -.->|"SSE · avisos de atualização"| WEB
+    end
+
+    V --> EX
+    V --> WEB
+```
+
+| Camada | Sprint 2 | Sprint 3 |
+| :--- | :--- | :--- |
+| Interface | Expo SDK 58 · React Native · TypeScript | HTML · CSS · JavaScript · PWA |
+| API | PHP 8.2+ · PDO | Node.js 24+ · HTTP nativo |
+| Banco relacional | MySQL 8 / MariaDB 10.6+ | SQLite via `node:sqlite` |
+| Sessão | Bearer token; SecureStore no cliente nativo | Cookie HttpOnly e SameSite |
+| Atualização | Manual, retorno ao app e mudança de dia | Avisos via Server-Sent Events |
+| Qualidade | Testes unitários, HTTP e Playwright | Node Test Runner, Chromium e GitHub Actions |
+
+<a id="executar"></a>
+
+## 05 / Do repositório à primeira conexão
+
+<details open>
+<summary><strong>⚡ Sprint 3 · iniciar a versão web/PWA</strong></summary>
+
+Com **Git e Node.js 24+**, em uma pasta para uma instalação nova:
 
 ```sh
+git clone --branch sprint-3 https://github.com/Pedrooliveira1310/Cuidalli.git
+cd Cuidalli
 npm ci
 npm start
 ```
 
-Abra `http://localhost:3000`. Em desenvolvimento, `npm run dev` reinicia a API quando seus arquivos mudam. O servidor cria `data/cuidali.sqlite` automaticamente e preserva os dados entre reinícios. Não há conta ou senha padrão.
+Abra **http://localhost:3000**. O banco é criado em `data/cuidali.sqlite`; não é necessário configurar um servidor de banco separado. Não há conta ou senha padrão.
 
-1. Em **Criar conta**, cadastre o cuidador.
-2. Cadastre a pessoa idosa, seus medicamentos (uma entrada para cada horário), consultas e contatos de confiança.
-3. Use **Criar acesso do idoso** para definir seu e-mail e senha. Transmita essas credenciais de forma segura.
-4. No celular ou em outra janela, entre com o acesso do idoso. Ele vê apenas seus próprios dados e pode confirmar remédios, conversar com o assistente e pedir ajuda.
-5. O cuidador acompanha confirmações e alertas automaticamente no painel, e marca alertas como atendidos após verificar a situação.
+1. Crie sua conta de familiar/cuidador.
+2. Cadastre a pessoa idosa, medicamentos, consultas e um contato de confiança.
+3. Selecione **Criar acesso do idoso** e compartilhe as credenciais de forma segura.
+4. Entre com esse acesso em outra janela ou aparelho para confirmar doses, consultar o assistente e pedir ajuda.
+5. Acompanhe as atualizações e os alertas no painel do cuidador.
 
-## Entrega de código até a sprint 3
+Para desenvolvimento, use `npm run dev`. Para variáveis de ambiente, HTTPS, acesso pelo celular, endpoints e backups, siga o [guia da sprint 3](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-3/docs/GUIA-SPRINT3.md).
 
-O ponto de partida da branch `sprint-1` continha documentação. Esta implementação inclui a base da sprint 2 e a integração/testes da sprint 3:
+</details>
 
-- Autenticação por e-mail/senha; contas e permissões distintas para cuidador e idoso.
-- CRUD de pessoas idosas, medicamentos, contatos e consultas, com persistência relacional e integridade referencial.
-- Confirmação diária de medicamentos (`Já tomei` / `Ainda não`), histórico e dia calculado no fuso da pessoa.
-- Consultas com exportação `.ics` para agenda e lembretes durante o uso do aplicativo.
-- SOS com registro persistente, atualização automática no painel e ligação `tel:` para o contato principal.
-- Alerta de inatividade com limite configurável de 1 a 168 horas. Apenas ações reais do idoso renovam a atividade; abrir o painel do cuidador não renova esse prazo. Um único alerta por episódio de inatividade.
-- Assistente por texto, leitura em voz alta e reconhecimento de fala quando oferecido pelo navegador. Respostas programadas consultam os dados cadastrados; sem LLM ou diagnóstico médico.
-- Interface em português, responsiva, com alvos de toque de 56px, rótulos de formulário, navegação por teclado, foco visível e regiões de aviso acessíveis.
-- Manifesto e service worker para instalação como **aplicação web/PWA**, conforme suporte do navegador. Não inclui binários nativos Android/iOS ou login biométrico.
-- Testes unitários, de integração HTTP e fluxo real em Chromium, além de CI no GitHub Actions.
+<details>
+<summary><strong>📱 Sprint 2 · iniciar Expo, PHP e banco relacional</strong></summary>
 
-Somente código e instruções operacionais do repositório fazem parte desta entrega. O documento acadêmico original foi preservado; apresentação e documentação ABNT não foram produzidas.
-
-## Configuração
-
-Variáveis opcionais estão em `.env.example`. Para usar arquivo local:
+Requer Node.js compatível com `mobile/package.json`, **PHP 8.2+ com PDO/pdo_mysql** e **MySQL 8 ou MariaDB 10.6+** em execução.
 
 ```sh
-cp .env.example .env
-node --env-file=.env server/index.js
+git clone --branch sprint-2 https://github.com/Pedrooliveira1310/Cuidalli.git
+cd Cuidalli
 ```
 
-| Variável | Padrão | Finalidade |
-| --- | --- | --- |
-| `HOST` | `127.0.0.1` | Interface de escuta; use `0.0.0.0` em container |
-| `PORT` | `3000` | Porta HTTP |
-| `DATABASE_PATH` | `./data/cuidali.sqlite` | Banco SQLite persistente |
-| `COOKIE_SECURE` | `false` | Defina `true` em produção via HTTPS |
+Configure o banco e os arquivos `backend/.env` e `mobile/.env` conforme o [guia da sprint 2](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-2/docs/GUIA-SPRINT2.md). Reutilize os arquivos e as credenciais existentes se já houver instalação.
 
-Para acesso pelo celular, hospede atrás de proxy reverso HTTPS com domínio acessível. Microfone e instalação dependem de contexto seguro e suporte do navegador. O painel usa Server-Sent Events: configure o proxy sem buffering para `/api/events` e com timeout adequado. Configure o encaminhamento de `Host` para o mesmo host público, pois a API verifica a origem das escritas.
-
-Processos precisam permanecer ativos para detectar inatividade; o monitor roda a cada minuto e também ao consultar o painel. Requisições e alertas precisam de internet. Lembretes falados são executados a cada 30 segundos **enquanto o aplicativo está aberto**; não há push em segundo plano. Mantenha o aplicativo aberto para recebê-los. Reconhecimento de voz pode enviar áudio ao serviço do navegador; o servidor Cuidali armazena apenas o texto enviado e a resposta.
-
-O SOS avisa **dentro do painel**, sem SMS, WhatsApp, chamada automática ou despacho de emergência. O cuidador precisa acompanhar o painel. A ligação depende da confirmação do usuário e de telefonia disponível no aparelho. O primeiro contato cadastrado é o principal; sem contato, o alerta ainda é registrado e o app exibe a orientação de ligar 192 no Brasil.
-
-## Atualização da interface
-
-Integração do pacote de atualização do desenvolvimento: nova apresentação com ilustração SVG local, cartões e navegação redesenhados, mantendo a paleta azul original. No celular, o formulário de acesso aparece primeiro. O acesso oferece mostrar/ocultar senha e preserva o e-mail ao alternar entre entrar e cadastrar.
-
-Rascunhos do assistente são mantidos em memória por pessoa acompanhada durante navegação e atualização; são removidos ao sair. Perguntas rápidas preservam o texto ainda não enviado. O aplicativo sinaliza reconexão, indisponibilidade do servidor e ausência de internet em português.
-
-O histórico das melhorias recebidas e a validação da integração estão em [TESTES-E-MELHORIAS.md](TESTES-E-MELHORIAS.md). Capturas de referência recebidas estão em `artifacts/`.
-
-## Testes
+Em um terminal, a partir da raiz:
 
 ```sh
-npm run check
-npm test
+cd backend
+php migrate.php
+php -S 0.0.0.0:8000 -t public public/index.php
 ```
 
-A suíte Node testa validação, autenticação e expiração, isolamento de contas, permissões, CRUD, medicação por dia/fuso, SOS, deduplicação, inatividade, assistente, eventos, segurança HTTP e persistência após reinício. Usa bancos temporários; não altera os dados de desenvolvimento.
-
-Teste opcional de navegador (Python 3.10+, Chromium):
+Em outro terminal, a partir da raiz:
 
 ```sh
-python -m venv .venv
-.venv/bin/pip install -r requirements-browser.txt
-CHROMIUM_PATH=/usr/bin/chromium .venv/bin/python tests/browser_smoke.py
+cd mobile
+npm ci
+npm run web -- --port 8081
 ```
 
-O teste inicia uma API e banco temporários, exercita cuidador e idoso em sessões independentes, CRUD, exportação de agenda, confirmação sincronizada, SOS, assistente, layout de celular, ampliação de texto e acessibilidade básica de rótulos/teclado/alvos de toque. Não substitui auditoria WCAG nem testes com usuários idosos. Áudio/microfone e ligação telefônica precisam de verificação manual em aparelho compatível.
+Para web local, a API em `EXPO_PUBLIC_API_URL` deve apontar para `http://127.0.0.1:8000`, e a origem `http://localhost:8081` deve estar no `CORS_ORIGINS` do backend.
 
-## Estrutura e API
+No celular, use o IP alcançável do computador em vez de `localhost` e um Expo Go/development build compatível com SDK 58. O [guia completo](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-2/docs/GUIA-SPRINT2.md) cobre Windows, Wi-Fi, firewall, migrações, vínculo dos perfis e testes.
 
-```text
-server/index.js       inicialização e encerramento
-server/app.js         API HTTP, autorização, sessões e eventos
-server/db.js          schema SQLite e índices
-server/domain.js      validação, fusos e assistente
-public/               interface web/PWA
-tests/               testes de domínio, API e navegador
-.github/workflows/    integração contínua
-```
+</details>
 
-Rotas principais (JSON, autenticação via cookie):
+Já possui o repositório? Preserve alterações locais e configurações antes de trocar de branch ou atualizar. Execute os comandos no diretório da versão correspondente.
 
-| Rota | Métodos | Uso |
-| --- | --- | --- |
-| `/api/register`, `/api/login` | POST | Cadastro de cuidador e login |
-| `/api/me`, `/api/health` | GET | Sessão e saúde da API |
-| `/api/logout` | POST | Revogar sessão |
-| `/api/seniors` | GET, POST | Listar pessoas autorizadas / cadastrar |
-| `/api/seniors/:id` | GET, PUT, DELETE | Perfil e todos os dados relacionados |
-| `/api/seniors/:id/account` | POST | Acesso individual do idoso |
-| `/api/seniors/:id/medications`, `appointments`, `contacts` | POST | Cadastrar recurso |
-| `/api/seniors/:id/{recurso}/:item` | PUT, DELETE | Editar/excluir recurso |
-| `/api/seniors/:id/confirmations` | POST | `medication_id`, `status` |
-| `/api/seniors/:id/assistant` | POST | `message` |
-| `/api/seniors/:id/sos` | POST | Alerta e contato para ligação |
-| `/api/seniors/:id/activity` | POST | Atividade da própria pessoa idosa |
-| `/api/seniors/:id/alerts/:alerta` | PATCH | Cuidador marca como atendido |
-| `/api/events` | GET | Avisos SSE de atualização (sem dados pessoais) |
+<a id="acessibilidade"></a>
 
-Use GET do perfil para consultar os recursos e os últimos 100 registros de confirmações/alertas e 30 interações. Horários de consulta na API devem ter fuso explícito (ISO 8601). A interface converte o horário local do aparelho para UTC. Confirmações se referem ao dia atual no fuso do idoso; não são prescrições nem ajuste de dosagem.
+## 06 / Tecnologia que acolhe
 
-## Segurança e operação
+**A experiência foi pensada para reduzir o esforço de usar tecnologia no dia a dia.**
 
-Senhas usam scrypt com sal aleatório; tokens de sessão aleatórios são armazenados apenas como hash, expiram em sete dias e são revogados ao sair. Cookies HttpOnly/SameSite, verificação de origem, consultas parametrizadas, limite de corpo, limite de tentativas de login, escape de conteúdo e CSP estão implementados. O service worker armazena apenas arquivos públicos, sem dados clínicos nem respostas da API.
+- Ações com áreas de toque de pelo menos **56 px**.
+- Rótulos explícitos, foco visível e linguagem em português.
+- Identidade visual com azul profundo, superfícies claras e cores de estado.
+- Jornadas distintas para quem recebe cuidado e quem acompanha.
+- Na sprint 3: acesso prioritário no celular, mostrar/ocultar senha, rascunhos do assistente por pessoa e avisos de conexão.
 
-SQLite foi escolhido como banco relacional para uma execução local reproduzível; **não há adaptador MySQL** nesta versão. Use uma instância de servidor por arquivo de banco. Para produção, configure HTTPS, `COOKIE_SECURE=true`, disco criptografado, backups protegidos e política de retenção/consentimento. O arquivo do banco contém dados pessoais sem criptografia própria. Restrinja acesso ao diretório `data/`; não o versione. Para uma cópia simples consistente, pare o servidor antes de copiar **todo** o diretório `data/`, inclusive arquivos WAL presentes; restaure com o servidor parado. Não há recuperação de senha por e-mail nesta versão.
+Verificações básicas de acessibilidade estão nos testes de interface. Elas não equivalem a certificação WCAG ou validação com leitores de tela e usuários idosos.
 
-A aplicação é um projeto acadêmico funcional. Uso assistencial real exige validação operacional e de privacidade; alertas não substituem serviços de emergência.
+<a id="qualidade"></a>
 
-## Equipe
+## 07 / Qualidade verificável
 
-Pedro de Oliveira · Enzo Avanze · Isabella Dias da Silva · Enzo Yudi Kadooka · Vitor Matheus Canali Pereira · Evelyn Silva de Lima.
+| Versão | Como verificar | Evidência disponível |
+| :--- | :--- | :--- |
+| Sprint 2 | `npm run typecheck`, `npm run test:unit` e `npm run export:web` dentro de `mobile`; integração PHP e E2E com banco separado | [Correções e testes](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-2/docs/CORRECOES-SPRINT2.md) · [Migração SDK 58](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-2/docs/MIGRACAO-SDK58.md) |
+| Sprint 3 | `npm run check`, `npm test` e `python tests/browser_smoke.py` na raiz, com as dependências do teste de navegador instaladas | [Registro da integração](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-3/TESTES-E-MELHORIAS.md) · [CI](https://github.com/Pedrooliveira1310/Cuidalli/actions/workflows/ci.yml?query=branch%3Asprint-3) |
 
-Documento original de concepção: [Kannali_Cuidali.docx](Kannali_Cuidali.docx).
+Na integração documentada da sprint 3, passaram **6 testes de domínio/API** e **1 fluxo completo no Chromium**, incluindo sincronização, SOS, rascunhos por pessoa e reconexão. São evidências daquela execução; o badge mostra o estado informado pelo GitHub Actions.
+
+Os testes da sprint 3 usam bancos temporários. A integração da sprint 2 exige banco exclusivo de testes e autorização explícita de reset. Consulte o guia antes de executá-la sobre qualquer banco.
+
+## 08 / Limites que precisam estar claros
+
+| Recurso | Comportamento real |
+| :--- | :--- |
+| SOS na sprint 2 | Solicita abertura do discador; não confirma ligação ou atendimento |
+| SOS na sprint 3 | Registra alerta no painel e oferece ligação ao contato; requer conexão para registrar |
+| Entrega externa de alertas | Sem envio de SMS/WhatsApp ou despacho automático de emergência |
+| Assistente na sprint 2 | Atalhos determinísticos de cuidado |
+| Assistente na sprint 3 | Respostas programadas com dados cadastrados, texto e voz conforme o navegador; sem LLM ou diagnóstico |
+| Lembretes na sprint 3 | Requerem o app aberto; sem push em segundo plano |
+| Inatividade na sprint 3 | Requer servidor ativo; verifica o prazo a cada minuto e ao consultar o painel |
+| Aplicativo nativo | Expo na sprint 2; a sprint 3 é web/PWA e não entrega APK/IPA |
+
+Senhas e sessões possuem mecanismos de proteção descritos nos guias. Antes de uso real com dados de saúde, configure HTTPS, acesso restrito, consentimento, retenção e backups protegidos. O banco SQLite da sprint 3 não possui criptografia própria.
+
+**O Cuidali é um projeto acadêmico e não substitui atendimento profissional ou serviços de emergência. No Brasil, em emergência médica, ligue 192.**
+
+## 09 / Explore o projeto
+
+| Referência | Acesso |
+| :--- | :--- |
+| Concepção original | [Documento da sprint 1](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-1/Kannali_Cuidali.docx) |
+| API e permissões da sprint 2 | [Contratos REST](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-2/docs/API.md) |
+| Modelo de dados da sprint 2 | [Entidades e relacionamentos](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-2/docs/MODELO.md) |
+| Operação e API da sprint 3 | [Guia de execução](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-3/docs/GUIA-SPRINT3.md) |
+| Evolução da interface | [Melhorias e validação](https://github.com/Pedrooliveira1310/Cuidalli/blob/sprint-3/TESTES-E-MELHORIAS.md) |
+| Referências visuais | [Capturas da interface](https://github.com/Pedrooliveira1310/Cuidalli/tree/sprint-3/artifacts) |
+| Protótipo | [Figma](https://www.figma.com/design/LlvM0OKdhtX7vr7LzgoKRS/Untitled) |
+
+## 10 / Pessoas por trás da tecnologia
+
+| Integrante | Atuação |
+| :--- | :--- |
+| Pedro de Oliveira | Scrum Master · Backend Engineer |
+| Enzo Avanze | Product Owner · Full Stack Developer |
+| Isabella Dias da Silva | UI/UX Specialist · Mobile Developer |
+| Enzo Yudi Kadooka | Frontend Lead · Mobile Developer |
+| Vitor Matheus Canali Pereira | Database Specialist · Backend Developer |
+| Evelyn Silva de Lima | QA Engineer · Technical Writer |
+
+Projeto do **4º termo de Desenvolvimento de Sistemas do SENAI “A. Jacob Lafer”**, desenvolvido com metodologia Scrum pela **Kannali Corp**.
+
+---
+
+<div align="center">
+
+### Cada conexão pode ser um gesto de cuidado.
+
+**Cuidali · Conectando gerações, cuidando de vidas.**
+
+<sub>Feito por pessoas. Conectado por tecnologia. Guiado pelo cuidado.</sub>
+
+</div>
