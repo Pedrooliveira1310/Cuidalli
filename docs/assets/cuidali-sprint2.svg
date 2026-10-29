@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-labelledby="title desc">
+  <title id="title">Cuidali — Sprint 2</title>
+  <desc id="desc">Tecnologia que aproxima. Cuidado que acompanha. Plataforma mobile e web de cuidado para idosos, por Kannali Corp.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0B1528"/><stop offset="1" stop-color="#15395C"/></linearGradient>
+    <linearGradient id="accent"><stop stop-color="#70E1F5"/><stop offset="1" stop-color="#91A7FF"/></linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 H 0 V 40" fill="none" stroke="#CEE1F4" stroke-opacity=".06"/></pattern>
+  </defs>
+  <rect width="1280" height="400" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="400" rx="24" fill="url(#grid)"/>
+  <path d="M850 0V70H960V135H1110V220H1280M940 400V315H1090V270H1210V165H1280" stroke="#70E1F5" stroke-opacity=".2" stroke-width="2" fill="none"/>
+  <g fill="#70E1F5"><circle cx="960" cy="135" r="5"/><circle cx="1110" cy="220" r="5"/><circle cx="1090" cy="315" r="5"/></g>
+  <rect x="64" y="48" width="252" height="32" rx="16" fill="#70E1F5" fill-opacity=".12" stroke="#70E1F5" stroke-opacity=".4"/>
+  <text x="84" y="69" fill="#9DEBFA" font-family="Arial, sans-serif" font-size="13" letter-spacing="2">KANNALI CORP / SPRINT 02</text>
+  <text x="60" y="180" font-family="Arial, sans-serif" font-size="94" font-weight="700" fill="#FFFFFF">Cuidali<tspan fill="#70E1F5">.</tspan></text>
+  <text x="64" y="232" font-family="Arial, sans-serif" font-size="28" fill="url(#accent)">Tecnologia que aproxima. Cuidado que acompanha.</text>
+  <text x="64" y="274" font-family="Arial, sans-serif" font-size="18" fill="#B8CBDF">Mobile + Web · API REST · Dados persistentes · Acessibilidade</text>
+  <path d="M64 324H174" stroke="#70E1F5" stroke-width="4" stroke-linecap="round"/>
+  <text x="194" y="330" font-family="Arial, sans-serif" font-size="14" letter-spacing="2" fill="#B8CBDF">CONECTANDO GERAÇÕES, CUIDANDO DE VIDAS.</text>
+  <g transform="translate(1005 83)">
+    <rect width="162" height="232" rx="28" fill="#0B1528" stroke="#70E1F5" stroke-opacity=".6" stroke-width="2"/>
+    <rect x="12" y="16" width="138" height="198" rx="18" fill="#1A365D"/>
+    <rect x="55" y="24" width="52" height="5" rx="3" fill="#CEE1F4" fill-opacity=".4"/>
+    <path d="M30 89H52L64 64L83 118L97 89H132" stroke="#70E1F5" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+    <rect x="28" y="145" width="106" height="18" rx="7" fill="#CEE1F4" fill-opacity=".8"/>
+    <rect x="28" y="177" width="72" height="12" rx="6" fill="#F3D7A0" fill-opacity=".9"/>
+  </g>
+</svg>
