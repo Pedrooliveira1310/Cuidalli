@@ -1,103 +1,125 @@
 # Cuidali
 
-**Assistente Virtual e Plataforma de Cuidado para Idosos**
+**Cuidado que conecta.** Plataforma da Kannali Corp para idosos e seus familiares/cuidadores, desenvolvida para o projeto do 4º termo do SENAI “A. Jacob Lafer”.
 
-> Kannali Corp: Conectando gerações, cuidando de vidas.
+## Executar
 
-![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
-![Sprint](https://img.shields.io/badge/sprint-1%20conclu%C3%ADda-blue)
-![Curso](https://img.shields.io/badge/SENAI-4%C2%BA%20Termo%20DS-informational)
+Requer **Node.js 24+** (SQLite nativo). Sem dependências de produção, chaves externas ou serviços pagos.
 
----
+```sh
+npm ci
+npm start
+```
 
-## Sobre o projeto
+Abra `http://localhost:3000`. Em desenvolvimento, `npm run dev` reinicia a API quando seus arquivos mudam. O servidor cria `data/cuidali.sqlite` automaticamente e preserva os dados entre reinícios. Não há conta ou senha padrão.
 
-O envelhecimento da população, muitas vezes acompanhado de isolamento social, traz desafios crescentes ao cuidado com a saúde e o bem-estar da pessoa idosa. O **Cuidali** é um sistema que integra um **aplicativo mobile acessível** para idosos e um **painel web** para cuidadores e familiares, combinando interação conversacional (voz e texto), lembretes ativos de medicação com confirmação, agendamento de consultas médicas e um botão de emergência SOS.
+1. Em **Criar conta**, cadastre o cuidador.
+2. Cadastre a pessoa idosa, seus medicamentos (uma entrada para cada horário), consultas e contatos de confiança.
+3. Use **Criar acesso do idoso** para definir seu e-mail e senha. Transmita essas credenciais de forma segura.
+4. No celular ou em outra janela, entre com o acesso do idoso. Ele vê apenas seus próprios dados e pode confirmar remédios, conversar com o assistente e pedir ajuda.
+5. O cuidador acompanha confirmações e alertas automaticamente no painel, e marca alertas como atendidos após verificar a situação.
 
-A proposta é desmistificar a tecnologia para a terceira idade: interface com botões ampliados, alto contraste e navegação mínima, prevenindo erros acidentais e promovendo autonomia.
+## Entrega de código até a sprint 3
 
-Projeto desenvolvido como Trabalho de Conclusão do 4º Termo do curso Técnico em Desenvolvimento de Sistemas — SENAI "A. Jacob Lafer", sob metodologia ágil Scrum.
+O ponto de partida da branch `sprint-1` continha documentação. Esta implementação inclui a base da sprint 2 e a integração/testes da sprint 3:
 
-## Equipe — Kannali Corp
+- Autenticação por e-mail/senha; contas e permissões distintas para cuidador e idoso.
+- CRUD de pessoas idosas, medicamentos, contatos e consultas, com persistência relacional e integridade referencial.
+- Confirmação diária de medicamentos (`Já tomei` / `Ainda não`), histórico e dia calculado no fuso da pessoa.
+- Consultas com exportação `.ics` para agenda e lembretes durante o uso do aplicativo.
+- SOS com registro persistente, atualização automática no painel e ligação `tel:` para o contato principal.
+- Alerta de inatividade com limite configurável de 1 a 168 horas. Apenas ações reais do idoso renovam a atividade; abrir o painel do cuidador não renova esse prazo. Um único alerta por episódio de inatividade.
+- Assistente por texto, leitura em voz alta e reconhecimento de fala quando oferecido pelo navegador. Respostas programadas consultam os dados cadastrados; sem LLM ou diagnóstico médico.
+- Interface em português, responsiva, com alvos de toque de 56px, rótulos de formulário, navegação por teclado, foco visível e regiões de aviso acessíveis.
+- Manifesto e service worker para instalação como **aplicação web/PWA**, conforme suporte do navegador. Não inclui binários nativos Android/iOS ou login biométrico.
+- Testes unitários, de integração HTTP e fluxo real em Chromium, além de CI no GitHub Actions.
 
-| Integrante | Função Scrum / Especialidade |
-| --- | --- |
-| Pedro de Oliveira | Scrum Master / Backend Engineer |
-| Enzo Avanze | Product Owner / Full Stack Developer |
-| Isabella Dias da Silva | UI/UX Specialist / Mobile Developer |
-| Enzo Yudi Kadooka | Frontend Lead / Mobile Developer |
-| Vitor Matheus Canali Pereira | Database Specialist / Backend Developer |
-| Evelyn Silva de Lima | QA Engineer / Technical Writer |
+Somente código e instruções operacionais do repositório fazem parte desta entrega. O documento acadêmico original foi preservado; apresentação e documentação ABNT não foram produzidas.
 
-## Funcionalidades
+## Configuração
 
-**App mobile (idoso)**
-- Tela inicial simplificada com lembretes do dia
-- Lembrete de medicação com confirmação ("Já tomei" / "Ainda não")
-- Lembrete de consultas médicas
-- Botão de emergência SOS (toque único, aciona contato de confiança)
-- Assistente conversacional por voz e texto
+Variáveis opcionais estão em `.env.example`. Para usar arquivo local:
 
-**Painel web (familiar / cuidador)**
-- Cadastro do idoso, medicamentos, horários e consultas
-- Cadastro de contato(s) de emergência
-- Histórico de confirmações de medicação e alertas de SOS
-- Alerta de inatividade (idoso sem interagir com o app por período prolongado)
+```sh
+cp .env.example .env
+node --env-file=.env server/index.js
+```
 
-## Diferenciais
-
-- **Confirmação ativa** — o app conversa com o idoso e pede confirmação, em vez de apenas disparar uma notificação estática
-- **Alerta de inatividade** — detecta longos períodos sem uso e avisa o familiar
-- **Acessibilidade real** — tipografia grande (18–28px), alto contraste, áreas de toque de no mínimo 56px, seguindo diretrizes WCAG 2.1
-
-## Identidade visual
-
-| Cor | Hex | Uso |
+| Variável | Padrão | Finalidade |
 | --- | --- | --- |
-| Azul Institucional | `#1A365D` | Cabeçalhos, navegação, títulos |
-| Azul Acolhedor | `#2B6CB0` | Botões primários, ícones, estados ativos |
-| Vermelho SOS | `#E53E3E` | Botão de emergência e alertas urgentes |
-| Verde Sucesso | `#38A169` | Confirmação de medicação, status positivo |
-| Fundo Neutro | `#F7FAFC` | Fundo de tela, alta legibilidade |
+| `HOST` | `127.0.0.1` | Interface de escuta; use `0.0.0.0` em container |
+| `PORT` | `3000` | Porta HTTP |
+| `DATABASE_PATH` | `./data/cuidali.sqlite` | Banco SQLite persistente |
+| `COOKIE_SECURE` | `false` | Defina `true` em produção via HTTPS |
 
-Tipografia: famílias sem serifa (Inter, Roboto), priorizando legibilidade para o público idoso.
+Para acesso pelo celular, hospede atrás de proxy reverso HTTPS com domínio acessível. Microfone e instalação dependem de contexto seguro e suporte do navegador. O painel usa Server-Sent Events: configure o proxy sem buffering para `/api/events` e com timeout adequado. Configure o encaminhamento de `Host` para o mesmo host público, pois a API verifica a origem das escritas.
 
-## Modelagem de dados
+Processos precisam permanecer ativos para detectar inatividade; o monitor roda a cada minuto e também ao consultar o painel. Requisições e alertas precisam de internet. Lembretes falados são executados a cada 30 segundos **enquanto o aplicativo está aberto**; não há push em segundo plano. Mantenha o aplicativo aberto para recebê-los. Reconhecimento de voz pode enviar áudio ao serviço do navegador; o servidor Cuidali armazena apenas o texto enviado e a resposta.
 
-Modelagem completa disponível em [`/docs`](./docs):
-- **MER** — modelo conceitual (entidades e relacionamentos)
-- **DER** — modelo detalhado (atributos, chaves primárias/estrangeiras, tipos de dados)
-- **Dicionário de Dados** — especificação completa de todas as entidades
+O SOS avisa **dentro do painel**, sem SMS, WhatsApp, chamada automática ou despacho de emergência. O cuidador precisa acompanhar o painel. A ligação depende da confirmação do usuário e de telefonia disponível no aparelho. O primeiro contato cadastrado é o principal; sem contato, o alerta ainda é registrado e o app exibe a orientação de ligar 192 no Brasil.
 
-Entidades principais: `Idoso`, `Familiar_Cuidador`, `Medicamento`, `Confirmacao`, `Consulta`, `Contato_Emergencia`, `Alerta_Emergencia`, `Historico_Interacao`.
+## Testes
 
-## Protótipo
+```sh
+npm run check
+npm test
+```
 
-Protótipo de alta fidelidade desenvolvido no Figma, cobrindo o fluxo completo: seleção de perfil → cadastro → login/biometria → tela inicial → lembrete de remédio → lembrete de consulta → SOS → assistente conversacional.
+A suíte Node testa validação, autenticação e expiração, isolamento de contas, permissões, CRUD, medicação por dia/fuso, SOS, deduplicação, inatividade, assistente, eventos, segurança HTTP e persistência após reinício. Usa bancos temporários; não altera os dados de desenvolvimento.
 
-🔗 Link do protótipo: https://www.figma.com/design/LlvM0OKdhtX7vr7LzgoKRS/Untitled?node-id=0-1&p=f&t=Gvd4CPKAeHMS5v0W-0
+Teste opcional de navegador (Python 3.10+, Chromium):
 
-## Roadmap (Sprints)
+```sh
+python -m venv .venv
+.venv/bin/pip install -r requirements-browser.txt
+CHROMIUM_PATH=/usr/bin/chromium .venv/bin/python tests/browser_smoke.py
+```
 
-| Sprint | Objetivo | Entregáveis |
+O teste inicia uma API e banco temporários, exercita cuidador e idoso em sessões independentes, CRUD, exportação de agenda, confirmação sincronizada, SOS, assistente, layout de celular, ampliação de texto e acessibilidade básica de rótulos/teclado/alvos de toque. Não substitui auditoria WCAG nem testes com usuários idosos. Áudio/microfone e ligação telefônica precisam de verificação manual em aparelho compatível.
+
+## Estrutura e API
+
+```text
+server/index.js       inicialização e encerramento
+server/app.js         API HTTP, autorização, sessões e eventos
+server/db.js          schema SQLite e índices
+server/domain.js      validação, fusos e assistente
+public/               interface web/PWA
+tests/               testes de domínio, API e navegador
+.github/workflows/    integração contínua
+```
+
+Rotas principais (JSON, autenticação via cookie):
+
+| Rota | Métodos | Uso |
 | --- | --- | --- |
-| **Sprint 1** ✅ | Levantamento de requisitos, modelagem conceitual/lógica (MER/DER), dicionário de dados, protótipo de alta fidelidade | Documento de requisitos, MER, DER, dicionário de dados, protótipo Figma |
-| **Sprint 2** 🔄 | Desenvolvimento da API REST, estrutura do banco de dados, telas iniciais do mobile | Banco de dados criado, rotas da API, telas de autenticação/home |
-| **Sprint 3** ⏳ | Integração SOS, assistente de voz, testes de acessibilidade/usabilidade, documentação técnica ABNT | Sistema funcional completo, relatório de testes, apresentação final |
+| `/api/register`, `/api/login` | POST | Cadastro de cuidador e login |
+| `/api/me`, `/api/health` | GET | Sessão e saúde da API |
+| `/api/logout` | POST | Revogar sessão |
+| `/api/seniors` | GET, POST | Listar pessoas autorizadas / cadastrar |
+| `/api/seniors/:id` | GET, PUT, DELETE | Perfil e todos os dados relacionados |
+| `/api/seniors/:id/account` | POST | Acesso individual do idoso |
+| `/api/seniors/:id/medications`, `appointments`, `contacts` | POST | Cadastrar recurso |
+| `/api/seniors/:id/{recurso}/:item` | PUT, DELETE | Editar/excluir recurso |
+| `/api/seniors/:id/confirmations` | POST | `medication_id`, `status` |
+| `/api/seniors/:id/assistant` | POST | `message` |
+| `/api/seniors/:id/sos` | POST | Alerta e contato para ligação |
+| `/api/seniors/:id/activity` | POST | Atividade da própria pessoa idosa |
+| `/api/seniors/:id/alerts/:alerta` | PATCH | Cuidador marca como atendido |
+| `/api/events` | GET | Avisos SSE de atualização (sem dados pessoais) |
 
-## Tecnologias
+Use GET do perfil para consultar os recursos e os últimos 100 registros de confirmações/alertas e 30 interações. Horários de consulta na API devem ter fuso explícito (ISO 8601). A interface converte o horário local do aparelho para UTC. Confirmações se referem ao dia atual no fuso do idoso; não são prescrições nem ajuste de dosagem.
 
-> Stack em definição pela equipe — atualizar conforme decisões técnicas forem fechadas.
+## Segurança e operação
 
-- **Mobile:** a definir (ex.: React Native/Expo)
-- **Web:** a definir
-- **Backend:** API REST
-- **Banco de dados:** relacional (MySQL)
+Senhas usam scrypt com sal aleatório; tokens de sessão aleatórios são armazenados apenas como hash, expiram em sete dias e são revogados ao sair. Cookies HttpOnly/SameSite, verificação de origem, consultas parametrizadas, limite de corpo, limite de tentativas de login, escape de conteúdo e CSP estão implementados. O service worker armazena apenas arquivos públicos, sem dados clínicos nem respostas da API.
 
-## Status do projeto
+SQLite foi escolhido como banco relacional para uma execução local reproduzível; **não há adaptador MySQL** nesta versão. Use uma instância de servidor por arquivo de banco. Para produção, configure HTTPS, `COOKIE_SECURE=true`, disco criptografado, backups protegidos e política de retenção/consentimento. O arquivo do banco contém dados pessoais sem criptografia própria. Restrinja acesso ao diretório `data/`; não o versione. Para uma cópia simples consistente, pare o servidor antes de copiar **todo** o diretório `data/`, inclusive arquivos WAL presentes; restaure com o servidor parado. Não há recuperação de senha por e-mail nesta versão.
 
-🚧 Em desenvolvimento — Sprint 1 concluída.
+A aplicação é um projeto acadêmico funcional. Uso assistencial real exige validação operacional e de privacidade; alertas não substituem serviços de emergência.
 
-## Contexto acadêmico
+## Equipe
 
-Projeto desenvolvido para fins educacionais como parte do Trabalho de Conclusão do curso Técnico em Desenvolvimento de Sistemas, SENAI "A. Jacob Lafer" — Santo André, 2026.
+Pedro de Oliveira · Enzo Avanze · Isabella Dias da Silva · Enzo Yudi Kadooka · Vitor Matheus Canali Pereira · Evelyn Silva de Lima.
+
+Documento original de concepção: [Kannali_Cuidali.docx](Kannali_Cuidali.docx).
