@@ -394,6 +394,7 @@ public final class MainActivity extends Activity {
         web.addJavascriptInterface(new NativeBridge(), "CuidaliNative");
 
         web.setWebChromeClient(new android.webkit.WebChromeClient(){
+@Override public boolean onConsoleMessage(android.webkit.ConsoleMessage message){android.util.Log.e("CuidaliWeb",message.message()+" @"+message.lineNumber());return true;}
 
             @Override public boolean onJsConfirm(WebView view,String url,String message,android.webkit.JsResult result){new AlertDialog.Builder(MainActivity.this).setTitle("Cuidali").setMessage(message).setNegativeButton("Cancelar",(d,w)->result.cancel()).setPositiveButton("Confirmar",(d,w)->result.confirm()).setOnCancelListener(d->result.cancel()).show();return true;}
 
@@ -404,6 +405,7 @@ public final class MainActivity extends Activity {
         WebSettings options = web.getSettings();
 
         options.setJavaScriptEnabled(true);
+        options.setDomStorageEnabled(true);
 
         options.setAllowFileAccess(false);
 
