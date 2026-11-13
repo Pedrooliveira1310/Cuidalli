@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 test('assistente e sessão web',async({page,request})=>{
  page.on('pageerror',e=>console.log('ERROR '+e.message));page.on('console',m=>{if(m.type()==='error')console.log('CONSOLE '+m.text());});
  const phone='117'+String(Date.now()).slice(-8), password='TesteCuidali123';
- const r=await request.post('http://127.0.0.1:8010/auth/register',{data:{role:'elder',name:'Teste Assistente',birth_date:'1960-01-01',phone,password,emergency_contact:{name:'Contato teste',phone:'11900000000',relationship:'Família'}}});expect(r.status()).toBe(201);
+ const r=await request.post((process.env.E2E_API_URL || 'http://127.0.0.1:8010')+'/auth/register',{data:{role:'elder',name:'Teste Assistente',birth_date:'1960-01-01',phone,password,emergency_contact:{name:'Contato teste',phone:'11900000000',relationship:'Família'}}});expect(r.status()).toBe(201);
  await page.goto('/');await page.getByRole('button',{name:'Já tenho conta · Entrar'}).click();await page.getByLabel('Telefone com DDD',{exact:true}).fill(phone);await page.getByLabel('Senha',{exact:true}).fill(password);await page.getByRole('button',{name:'Entrar',exact:true}).click();
  await expect(page.getByRole('tab',{name:'Assistente',exact:true})).toBeVisible();
  await page.getByRole('tab',{name:'Assistente',exact:true}).click();

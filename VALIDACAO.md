@@ -7,6 +7,7 @@ Site: https://cuidali-production.up.railway.app. Aplicação, MySQL persistente 
 - API existente: 129 verificações aprovadas.
 - SOS, permissões, inatividade e assistente: 43 verificações aprovadas.
 - Fila push e autorização de dispositivos: 18 verificações aprovadas.
+- Ambiente publicado: 3 testes reais de navegador aprovados (cadastro, vínculo e cuidados; assistente e sessão; falha de conexão).
 - Cliente: 7 testes unitários e 14 testes de navegador aprovados; TypeScript aprovado.
 - APK com Firebase: compilação de release, assinatura e instalação aprovadas.
 - Usuário confirmou no celular: entrada, voz, discador e retorno, agenda e SOS ao cuidador na validação anterior.

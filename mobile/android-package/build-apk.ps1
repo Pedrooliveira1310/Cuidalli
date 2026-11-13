@@ -37,3 +37,9 @@ $signer = Get-ChildItem (Join-Path $Sdk 'build-tools') -Directory | Sort-Object 
 & $signer verify $destination
 if ($LASTEXITCODE -ne 0) { throw 'A verificação da assinatura falhou.' }
 Write-Output "APK Cuidali: $destination"
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::OpenRead($destination)
+try {
+ if (!(@($archive.Entries | Where-Object FullName -Match "^assets/app/_expo/.+\.js$").Count)) { throw "A interface não foi incluída no APK." }
+} finally { $archive.Dispose() }

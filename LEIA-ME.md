@@ -32,7 +32,7 @@ A interface web compilada está em `backend/web`. Para recompilar, dentro de `mo
 
 O pacote também pode ser implantado em hospedagem PHP/MySQL. Sirva apenas `backend/public`, encaminhe as rotas para `index.php`, configure `COOKIE_SECURE=true` e agende `php backend/monitor.php` a cada minuto. Não exponha as pastas de configuração, banco, código ou testes.
 
-No Railway, o Dockerfile serve o app na porta 80. Use MySQL como serviço separado, vincule as variáveis de conexão e execute o monitor como serviço separado. A configuração final depende da conta conectada e da URL atribuída ao projeto.
+No Railway, o Dockerfile serve o app na porta 80. Use MySQL como serviço separado, vincule as variáveis de conexão e execute o monitor como serviço separado. O ambiente está publicado com aplicação, banco e monitor separados.
 
 ## APK
 
@@ -42,7 +42,7 @@ Dentro de `mobile`, execute:
 .\android-package\build-apk.ps1 -Sdk 'CAMINHO-DO-SDK' -Java 'CAMINHO-DO-JDK' -ServerUrl 'https://SEU-DOMINIO' -OutputPath 'C:\entrega\Cuidali.apk'
 ```
 
-Com `ServerUrl`, o APK abre direto no serviço e oculta a configuração manual. Sem esse parâmetro, o pacote permite configurar a origem para validação local. Use a mesma chave para atualizar a instalação existente. O código-fonte distribuído não inclui a chave.
+Com `ServerUrl`, o APK abre direto no serviço e oculta a configuração manual. A geração padrão usa a origem pública do Cuidali. Use a mesma chave para atualizar a instalação existente. O código-fonte distribuído não inclui a chave.
 
 O alvo Android é API 36. A assinatura é verificada pelo processo de geração. A aprovação de uma loja, a configuração de conta de distribuição e a validação física são etapas separadas.
 
