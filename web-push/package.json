@@ -1,0 +1,1 @@
+{"name":"cuidali-push-web","private":true,"type":"module","dependencies":{"@rollup/plugin-json":"^6.1.0","@rollup/plugin-node-resolve":"^16.0.3","esbuild":"0.27.0","firebase":"13.3.0","rollup":"^4.68.3"}}

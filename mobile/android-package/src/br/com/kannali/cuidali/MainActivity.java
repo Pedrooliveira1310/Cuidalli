@@ -108,6 +108,7 @@ public final class MainActivity extends Activity {
 
         voice=new android.speech.tts.TextToSpeech(this,status->{voiceReady=status==android.speech.tts.TextToSpeech.SUCCESS;if(voiceReady)voice.setLanguage(new Locale("pt","BR"));});
 
+        NativeNotifications.channels(this);
         String address = ReleaseConfig.SERVER.isEmpty() ? getPreferences(MODE_PRIVATE).getString("server", "") : ReleaseConfig.SERVER;
 
         if (address.isEmpty()) showSetup(address); else showApp(address);
@@ -517,7 +518,7 @@ public final class MainActivity extends Activity {
 
         @android.webkit.JavascriptInterface public String restoreSession(){try{return SecureSession.load(MainActivity.this);}catch(Exception e){return "";}}
 
-        @android.webkit.JavascriptInterface public void setMonitoring(boolean enabled){runOnUiThread(()->{getSharedPreferences("care",0).edit().putBoolean("enabled",enabled).apply();if(enabled){if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},78);else startCare();}else stopService(new Intent(MainActivity.this,CareService.class));});}
+        @android.webkit.JavascriptInterface public void setMonitoring(boolean enabled){runOnUiThread(()->{getSharedPreferences("care",0).edit().putBoolean("enabled",enabled).apply();if(enabled){if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},78);else startCare();}else NativeNotifications.disable(MainActivity.this);});}
 
         @android.webkit.JavascriptInterface public void speak(String text) {runOnUiThread(()->{if(voiceReady)voice.speak(text.substring(0,Math.min(text.length(),4000)),android.speech.tts.TextToSpeech.QUEUE_FLUSH,null,"assistant");});}
 
@@ -543,11 +544,11 @@ public final class MainActivity extends Activity {
 
             runOnUiThread(()->{
 
-                if(token.isEmpty()){stopService(new Intent(MainActivity.this,CareService.class));return;}
+                if(token.isEmpty()){NativeNotifications.disable(MainActivity.this);return;}
 
                 getSharedPreferences("care",0).edit().putString("server",activeServer).putString("user",Integer.toHexString(token.hashCode())).apply();
 
-                new AlertDialog.Builder(MainActivity.this).setTitle("Receber avisos de cuidado?").setMessage("Ative os avisos para receber pedidos de ajuda e lembretes mesmo com a tela do Cuidali fechada. O acompanhamento usa internet e mantém um aviso visível no Android.").setNegativeButton("Agora não",(d,w)->{getSharedPreferences("care",0).edit().putBoolean("enabled",false).apply();stopService(new Intent(MainActivity.this,CareService.class));}).setPositiveButton("Ativar avisos",(d,w)->{
+                new AlertDialog.Builder(MainActivity.this).setTitle("Receber avisos de cuidado?").setMessage("Receba pedidos de ajuda e lembretes mesmo quando o Cuidali estiver fechado. Você pode desativar os avisos a qualquer momento.").setNegativeButton("Agora não",(d,w)->{getSharedPreferences("care",0).edit().putBoolean("enabled",false).apply();NativeNotifications.disable(MainActivity.this);}).setPositiveButton("Ativar avisos",(d,w)->{
 
                     if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},78);
 
@@ -561,7 +562,8 @@ public final class MainActivity extends Activity {
 
     }
 
-    private void startCare(){getSharedPreferences("care",0).edit().putBoolean("enabled",true).apply();Intent i=new Intent(this,CareService.class);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);}
+    private void startCare(){NativeNotifications.enable(this);}
+    @Override protected void onResume(){super.onResume();if(getSharedPreferences("care",0).getBoolean("enabled",false))NativeNotifications.enable(this);}
 
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==78&&results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED)startCare();}
 

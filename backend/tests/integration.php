@@ -3,7 +3,7 @@ declare(strict_types=1);
 require dirname(__DIR__).'/src/bootstrap.php';
 if (PHP_SAPI!=='cli' || !str_ends_with(getenv('DB_NAME')?:'','_test') || getenv('TEST_ALLOW_RESET')!=='1') {fwrite(STDERR,"Use um banco terminado em _test e TEST_ALLOW_RESET=1. O teste apaga dados desse banco.\n");exit(1);}
 $db=database();
-foreach(['assistant_messages','care_alerts','care_settings','pain_views','activities','pains','contacts','appointments','dose_records','medication_times','medications','link_codes','care_links','sessions','rate_limits','users'] as $table) $db->exec("DELETE FROM $table");
+foreach(['push_outbox','push_devices','assistant_messages','care_alerts','care_settings','pain_views','activities','pains','contacts','appointments','dose_records','medication_times','medications','link_codes','care_links','sessions','rate_limits','users'] as $table) $db->exec("DELETE FROM $table");
 $base=rtrim(getenv('TEST_API_URL')?:'http://127.0.0.1:8001','/');$count=0;
 function check(bool $condition,string $message): void {global $count;$count++;if(!$condition)throw new RuntimeException("FALHOU: $message");echo "OK $count · $message\n";}
 function request(string $method,string $path,array $body=[],?string $token=null,int $expected=200): array {

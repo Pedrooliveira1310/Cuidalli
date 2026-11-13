@@ -1,1 +1,1 @@
-if('serviceWorker' in navigator && !window.CuidaliNative)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+if('serviceWorker' in navigator && !window.CuidaliNative)navigator.serviceWorker.register('/firebase-messaging-sw.js',{scope:'/'}).catch(()=>{});

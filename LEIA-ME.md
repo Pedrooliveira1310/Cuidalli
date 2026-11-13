@@ -2,6 +2,8 @@
 
 Aplicação de cuidado compartilhado para pessoas idosas e seus cuidadores. Site e APK usam a mesma interface React Native Web e a mesma API PHP com MySQL. O vínculo por código autoriza o compartilhamento de dados com múltiplos cuidadores.
 
+Site publicado: https://cuidali-production.up.railway.app
+
 ## Recursos
 
 - Cadastro e acesso por telefone e senha, com perfis de pessoa idosa e cuidador.
@@ -46,9 +48,11 @@ O alvo Android é API 36. A assinatura é verificada pelo processo de geração.
 
 ## Avisos em segundo plano
 
-O APK de validação inclui acompanhamento Android por serviço visível e consulta periódica. É uma implementação para validar recebimento e lembretes; depende de internet e das restrições do sistema. Android recente limita a duração de serviços de sincronização. Essa implementação não equivale a notificações push de produção.
+O Android usa Firebase Cloud Messaging. O navegador usa Firebase Messaging com service worker e requer HTTPS e permissão de notificações. O servidor mantém fila com deduplicação e novas tentativas e verifica sessão e vínculo antes da entrega.
 
-A publicação final dos avisos com app fechado depende da configuração do projeto Firebase e da integração FCM. O navegador permite avisos enquanto a página está aberta; o pacote atual ainda não implementa Web Push com a página fechada. Não apresentar esses dois cenários como já concluídos.
+Configure FIREBASE_SERVICE_ACCOUNT_JSON como segredo no servidor e no monitor e APP_PUBLIC_URL com a origem pública. Não publique a chave privada. Para recompilar os scripts web, execute npm ci e node build-rollup.mjs em web-push. Preserve push-client.js e install.js no HTML.
+
+A nova entrega FCM em segundo plano está em validação no aparelho.
 
 ## Verificação
 

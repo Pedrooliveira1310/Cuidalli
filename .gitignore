@@ -9,3 +9,6 @@
 mobile/android/
 *.idsig
 firebase-debug.log
+**/local.properties
+**/production-assets/
+**/.gradle/

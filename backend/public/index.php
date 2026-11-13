@@ -7,7 +7,7 @@ if (!$apiPath && $_SERVER['REQUEST_METHOD']==='GET') {
     $relative=$requestPath==='/'?'index.html':ltrim(rawurldecode($requestPath),'/');
     $file=$webRoot?realpath($webRoot.'/'.$relative):false;
     $ext=$file?strtolower(pathinfo($file,PATHINFO_EXTENSION)):'';
-    $types=['html'=>'text/html; charset=utf-8','js'=>'application/javascript; charset=utf-8','css'=>'text/css; charset=utf-8','json'=>'application/json','webmanifest'=>'application/manifest+json','svg'=>'image/svg+xml','png'=>'image/png','woff2'=>'font/woff2','ico'=>'image/x-icon'];
+    $types=['html'=>'text/html; charset=utf-8','js'=>'application/javascript; charset=utf-8','css'=>'text/css; charset=utf-8','json'=>'application/json','webmanifest'=>'application/manifest+json','svg'=>'image/svg+xml','png'=>'image/png','woff2'=>'font/woff2','ico'=>'image/x-icon','apk'=>'application/vnd.android.package-archive'];
     if($file&&str_starts_with($file,$webRoot.DIRECTORY_SEPARATOR)&&is_file($file)&&isset($types[$ext])) {
         header('Content-Type: '.$types[$ext]);header('X-Content-Type-Options: nosniff');
         header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://fcm.googleapis.com; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");header('Cache-Control: '.($ext==='html'||basename($file)==='sw.js'?'no-cache':'public, max-age=86400'));readfile($file);exit;

@@ -1305,7 +1305,7 @@ function Reminders({user,navigate}:{user:User;navigate:(tab:string)=>void}) {
       const time=new Date().toLocaleTimeString('sv-SE',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'});
       const due=data.doses.find((d:any)=>d.status!=='taken'&&d.time<=time&&!seen.current.has(data.date+':'+d.time_id));
       if(due){seen.current.add(data.date+':'+due.time_id);setNotice({...due,date:data.date});speak(`Lembrete de medicamento. ${due.name}, ${due.dosage}. Confira a dose antes de confirmar.`);}
-    }else if(Platform.OS==='web'&&!window.CuidaliNative&&'Notification' in window&&Notification.permission==='granted'){
+    }else if(Platform.OS==='web'&&!window.CuidaliNative&&!window.CuidaliWebPush?.isEnabled()&&'Notification' in window&&Notification.permission==='granted'){
       for(const a of data.items){const key='alert:'+a.id;if(!seen.current.has(key)){seen.current.add(key);new Notification(a.kind==='sos'?'Cuidali · Pedido de ajuda':'Cuidali · Novo aviso de cuidado',{body:'Abra o painel para acompanhar.',tag:key});}}
     }
   }catch{} }
@@ -1375,10 +1375,16 @@ export default function App() {
     })();
     return () => setExpiredHandler(() => {});
   }, []);
+  useEffect(()=>{
+    if(!user||Platform.OS!=='web'||window.CuidaliNative)return;
+    const restore=()=>window.CuidaliWebPush?.restore(token=>api('/push-tokens','POST',{token,platform:'web'})).catch(()=>{});
+    restore();window.addEventListener('cuidali-push-ready',restore);return()=>window.removeEventListener('cuidali-push-ready',restore);
+  },[user?.id]);
   async function logout() {
     if (logoutBusy) return;
     setLogoutBusy(true);
     const generation = ++sessionGeneration.current;
+    if(Platform.OS==='web'&&!window.CuidaliNative)window.CuidaliWebPush?.disable(token=>api('/push-tokens','DELETE',{token})).catch(()=>{});
     const revocation = api("/auth/logout", "POST").then(
       () => true,
       () => false,
@@ -1447,7 +1453,7 @@ export default function App() {
               <Button key={t} label={t} onPress={() => setTab(t)} />
             ),
           )}
-          {Platform.OS === "web" && !window.CuidaliNative && typeof Notification !== 'undefined' && <Button label="Ativar avisos neste navegador" tone="light" onPress={async()=>{const permission=await Notification.requestPermission();setSessionMessage(permission==='granted'?"Avisos ativados enquanto o Cuidali estiver aberto neste navegador.":"Permissão de avisos não concedida.");}} />}
+          {Platform.OS === "web" && !window.CuidaliNative && typeof Notification !== 'undefined' && <Button label="Ativar avisos neste navegador" tone="light" onPress={async()=>{try { if(!window.CuidaliWebPush) throw new Error("Os avisos ainda estão carregando. Tente novamente em instantes.");const message=await window.CuidaliWebPush.activate(token=>api('/push-tokens','POST',{token,platform:'web'}));setSessionMessage(message); } catch(e) {setSessionMessage((e as Error).message);}}} />}
           {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Ativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(true);setSessionMessage("Acompanhamento ativado neste aparelho.");}} />}
           {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Desativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(false);setSessionMessage("Avisos desativados neste aparelho.");}} />}
           <Button

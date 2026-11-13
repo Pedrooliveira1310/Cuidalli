@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "182381397947",
+    "project_id": "cuidali-oliveira1310",
+    "storage_bucket": "cuidali-oliveira1310.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:182381397947:android:cf30ccd0e92d583526e69e",
+        "android_client_info": {
+          "package_name": "br.com.kannali.cuidali"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbxZZ_w_ItAg45LelrsrR8Xucxc8372cg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
