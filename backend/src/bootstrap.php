@@ -12,6 +12,7 @@ if (is_file($env)) {
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Sao_Paulo');
 require_once __DIR__.'/PushService.php';
 require_once __DIR__.'/Api.php';
+require_once __DIR__.'/PasswordRecovery.php';
 function database(): PDO {
     $pdo = new PDO('mysql:host='.(getenv('DB_HOST') ?: '127.0.0.1').';port='.(getenv('DB_PORT') ?: '3306').';dbname='.(getenv('DB_NAME') ?: 'cuidali').';charset=utf8mb4', getenv('DB_USER') ?: 'cuidali', getenv('DB_PASSWORD') ?: '', [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES=>false]);
     $pdo->exec("SET time_zone = '+00:00'");

@@ -1,0 +1,8 @@
+ALTER TABLE users ADD COLUMN email VARCHAR(254) NULL, ADD UNIQUE KEY users_email(email);
+CREATE TABLE password_resets (
+ user_id BIGINT UNSIGNED PRIMARY KEY,
+ code_hash CHAR(64) NOT NULL,
+ expires_at DATETIME NOT NULL,
+ attempts INT NOT NULL DEFAULT 0,
+ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;

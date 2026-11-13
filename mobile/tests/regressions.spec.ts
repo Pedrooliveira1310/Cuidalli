@@ -61,7 +61,7 @@ async function setup(
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
 }
 async function open(page: Page, name: string) {
-  await page.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await page.getByRole("tab", { name: "Idoso", exact: true }).click();
   await page.getByRole("button", { name, exact: true }).click();
 }
 test("inputs web, telefone digitado/colado, autocomplete e senha visível", async ({
@@ -141,7 +141,7 @@ test("horários individuais, duplicados, datas e bloqueio durante salvamento", a
     .click();
   await open(page, "Medicamentos");
   await expect(
-    page.getByRole("tab", { name: "Cuidados", exact: true }),
+    page.getByRole("tab", { name: "Idoso", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await page
     .getByRole("button", { name: "Adicionar medicamento", exact: true })
@@ -199,7 +199,7 @@ test("atualização offline preserva dados e bloqueia doses; revogação limpa t
   ).toBeVisible();
   mode = "offline";
   await page
-    .getByRole("button", { name: "Atualizar lista", exact: true })
+    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
     .click();
   await expect(
     page.getByText(/Não foi possível atualizar os dados/),
@@ -219,7 +219,7 @@ test("atualização offline preserva dados e bloqueia doses; revogação limpa t
   ).toBeEnabled();
   mode = "denied";
   await page
-    .getByRole("button", { name: "Atualizar lista", exact: true })
+    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
     .click();
   await expect(
     page.getByText("Remédio protegido", { exact: false }),
@@ -235,7 +235,7 @@ test("sair offline encerra localmente e informa falha de revogação", async ({
     }
     return false;
   });
-  await page.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await page.getByRole("tab", { name: "Idoso", exact: true }).click();
   await page
     .getByRole("button", { name: "Sair da conta", exact: true })
     .click();
@@ -246,7 +246,7 @@ test("sair offline encerra localmente e informa falha de revogação", async ({
     page.getByRole("button", { name: "Já tenho conta · Entrar", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("tab", { name: "Cuidados", exact: true }),
+    page.getByRole("tab", { name: "Idoso", exact: true }),
   ).toHaveCount(0);
 });
 test("remoção de outro vínculo preserva seleção e remoção do atual a limpa", async ({
@@ -291,7 +291,7 @@ test("sessão expirada volta à autenticação com mensagem", async ({ page }) =
   ).toBeVisible();
   expired = true;
   await page
-    .getByRole("button", { name: "Atualizar lista", exact: true })
+    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
     .click();
   await expect(
     page.getByText("Sua sessão expirou. Entre novamente."),
@@ -411,10 +411,10 @@ test("401 atrasado após saída e novo login não encerra sessão nova", async (
     page.getByText("Remédio protegido", { exact: false }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Atualizar lista", exact: true })
+    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
     .click();
   await expect.poll(() => !!release).toBeTruthy();
-  await page.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await page.getByRole("tab", { name: "Idoso", exact: true }).click();
   await page
     .getByRole("button", { name: "Sair da conta", exact: true })
     .click();
@@ -431,10 +431,10 @@ test("401 atrasado após saída e novo login não encerra sessão nova", async (
   release();
   await response;
   await page
-    .getByRole("button", { name: "Atualizar lista", exact: true })
+    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
     .click();
   await expect(
-    page.getByRole("tab", { name: "Cuidados", exact: true }),
+    page.getByRole("tab", { name: "Idoso", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Sua sessão expirou. Entre novamente."),

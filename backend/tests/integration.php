@@ -3,7 +3,7 @@ declare(strict_types=1);
 require dirname(__DIR__).'/src/bootstrap.php';
 if (PHP_SAPI!=='cli' || !str_ends_with(getenv('DB_NAME')?:'','_test') || getenv('TEST_ALLOW_RESET')!=='1') {fwrite(STDERR,"Use um banco terminado em _test e TEST_ALLOW_RESET=1. O teste apaga dados desse banco.\n");exit(1);}
 $db=database();
-foreach(['push_outbox','push_devices','assistant_messages','care_alerts','care_settings','pain_views','activities','pains','contacts','appointments','dose_records','medication_times','medications','link_codes','care_links','sessions','rate_limits','users'] as $table) $db->exec("DELETE FROM $table");
+foreach(['password_resets','push_outbox','push_devices','assistant_messages','care_alerts','care_settings','pain_views','activities','pains','contacts','appointments','dose_records','medication_times','medications','link_codes','care_links','sessions','rate_limits','users'] as $table) $db->exec("DELETE FROM $table");
 $base=rtrim(getenv('TEST_API_URL')?:'http://127.0.0.1:8001','/');$count=0;
 function check(bool $condition,string $message): void {global $count;$count++;if(!$condition)throw new RuntimeException("FALHOU: $message");echo "OK $count · $message\n";}
 function request(string $method,string $path,array $body=[],?string $token=null,int $expected=200): array {
@@ -46,7 +46,7 @@ try {
  check(count(request('GET','/links',[],$et)['items'])===2,'Idoso pode ter dois cuidadores');
  $code=request('POST','/link-codes',[],$e2t);request('POST','/links/redeem',['code'=>$code['code']],$ct);check(count(request('GET','/links',[],$ct)['items'])===2,'Cuidador pode ter dois idosos');
  $med=['name'=>'Losartana teste','dosage'=>'50 mg','times'=>['08:00','20:00'],'start_date'=>date('Y-m-d'),'end_date'=>date('Y-m-d',strtotime('+5 day'))];
- request('POST',"/elders/$e/medications",$med,$et,403);
+ request('POST',"/elders/$e2/medications",$med,$et,403);
  request('POST',"/elders/$e/medications",[...$med,'start_date'=>'2025-02-29'],$ct,422);
  request('POST',"/elders/$e/medications",[...$med,'start_date'=>'0000-01-01'],$ct,422);
  request('POST',"/elders/$e/medications",[...$med,'end_date'=>'1900-01-01'],$ct,422);
@@ -67,7 +67,7 @@ try {
  check((int)$db->query('SELECT COUNT(*) FROM dose_records')->fetchColumn()===1,'Confirmação sem duplicidade');
  $a=['doctor'=>'Dra. Teste','specialty'=>'Cardiologia','scheduled_at'=>date('Y-m-d').'T14:00','location'=>'Clínica fictícia'];
  request('POST',"/elders/$e/appointments",[...$a,'scheduled_at'=>'29/02/2025 14:00'],$ct,422);
- request('POST',"/elders/$e/appointments",$a,$et,403);
+ request('POST',"/elders/$e2/appointments",$a,$et,403);
  $aid=request('POST',"/elders/$e/appointments",$a,$ct,201)['id'];
  $appointments=request('GET',"/elders/$e/appointments",[],$et)['items'];check(str_ends_with($appointments[0]['scheduled_at'],'17:00:00'),'Consulta 14h São Paulo persiste 17h UTC');
  request('PATCH',"/elders/$e/appointments/$aid",[...$a,'location'=>'Sala 2','scheduled_at'=>(new DateTimeImmutable())->format('d/m/Y').' 14:00'],$ct);

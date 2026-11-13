@@ -62,3 +62,7 @@ A nova entrega FCM em segundo plano está em validação no aparelho.
 - Testes de navegador: em `mobile`, defina `E2E_WEB_URL`, `E2E_API_URL` e `CHROMIUM_PATH`, depois execute `npm run test:e2e`.
 
 Não aponte os testes para um banco com dados de usuários. A instalação anterior no telefone já teve cadastro e login confirmados pelo usuário; a atualização atual precisa de validação de discador, áudio, agenda e avisos no aparelho.
+
+## Atualização de interface e conta
+
+O protótipo visual foi aplicado à interface. Pessoas idosas podem cadastrar e editar seus medicamentos e consultas. Meus dados permite editar o perfil e ativar biometria no Android. A recuperação usa e-mail e código de uso único; configure o emissor conforme [CONFIGURAR-EMAIL.md](docs/CONFIGURAR-EMAIL.md). O envio real depende de credenciais do provedor no servidor. Consulte VALIDACAO.md para resultados e limites de verificação.

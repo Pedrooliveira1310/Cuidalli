@@ -1,6 +1,8 @@
+import {AccountProfile,PasswordRecovery,LegalInformation} from "./src/AccountScreens";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   AppState,
+  Image,
   BackHandler,
   View,
   Text,
@@ -29,6 +31,7 @@ import {
 } from "./src/api";
 import {
   FormBusy,
+  BackButton,
   Button,
   Card,
   Form,
@@ -46,6 +49,7 @@ const profileFields: Field[] = [
   { key: "name", label: "Nome completo" },
   { key: "birth_date", label: "Nascimento", placeholder: "DD/MM/AAAA" },
   { key: "phone", label: "Telefone com DDD", phone: true },
+  { key: "email", label: "E-mail para recuperação" },
   { key: "password", label: "Senha (8 a 72 caracteres)", secure: true },
 ];
 const contactFields: Field[] = [
@@ -193,7 +197,7 @@ function Loading({ state }: { state: ReturnType<typeof useData> }) {
   return (
     <>
       <Button
-        label="Atualizar lista"
+        label="↻ Ver registros mais recentes"
         onPress={state.reload}
         disabled={state.loading}
       />
@@ -214,19 +218,26 @@ function Loading({ state }: { state: ReturnType<typeof useData> }) {
     </>
   );
 }
-function Auth({ onLogin }: { onLogin: (user: User) => void }) {
+function Auth({ onLogin,onScreenChange }: { onLogin: (user: User) => void;onScreenChange:()=>void }) {
+  useEffect(()=>{if(Platform.OS!=="web")return;const handler=async(e:Event)=>{const value=(e as CustomEvent).detail;if(!value.token){setMessage(value.message);return;}try{await saveToken(value.token);const r=await api("/me");onLogin(r.user);}catch(error){setMessage((error as Error).message);}};window.addEventListener("cuidali-biometric",handler);return()=>window.removeEventListener("cuidali-biometric",handler);},[]);
+  const [recovery,setRecovery]=useState(false),[legal,setLegal]=useState<"terms"|"privacy"|null>(null);
   const [role, setRole] = useState<"elder" | "caregiver">("elder"),
     [stage, setStage] = useState<"profile" | "register" | "login">("profile"),
     [message, setMessage] = useState("");
+  useEffect(()=>{onScreenChange();},[stage,recovery,legal]);
+  const logoScale=stage==="profile"?1:.46;
+  if(recovery)return <PasswordRecovery onBack={()=>setRecovery(false)} />;
+  if(legal)return <LegalInformation kind={legal} onBack={()=>setLegal(null)} />;
   return (
     <>
-      <Text style={s.title}>Cuidali</Text>
-      <Text style={s.muted}>Kannali Corp · Cuidando de vidas</Text>
+      <View style={{alignItems:"center",justifyContent:"center",flexDirection:stage==="profile"?"column":"row",gap:16,paddingVertical:8}}><View style={{width:100*logoScale,height:152*logoScale,overflow:"hidden",borderRadius:24,backgroundColor:colors.bg}}><Image source={require("./assets/prototype/logo.png")} accessibilityLabel="Logo Cuidali: cuidado entre gerações" style={{width:323*logoScale,height:181*logoScale,position:"absolute",left:-112*logoScale,top:0}} resizeMode="stretch" /></View><Text style={s.title}>Cuidali</Text></View>
+      {stage==="profile"&&<Text style={[s.muted,{textAlign:"center"}]}>Kannali Corp · Cuidando de vidas</Text>}
       {!!message && (
         <Text accessibilityRole="alert" style={s.success}>
           {message}
         </Text>
       )}
+      {stage !== "profile" && <BackButton onPress={()=>{setMessage("");setStage("profile");}} />}
       {stage === "profile" ? (
         <>
           <Text style={s.title}>Como você vai usar o Cuidali?</Text>
@@ -302,6 +313,7 @@ function Auth({ onLogin }: { onLogin: (user: User) => void }) {
                 name: v.name,
                 birth_date: v.birth_date,
                 phone: v.phone,
+                email: v.email,
                 password: v.password,
                 ...(role === "elder"
                   ? {
@@ -349,6 +361,8 @@ function Auth({ onLogin }: { onLogin: (user: User) => void }) {
               onLogin(result.user);
             }}
           />
+          {Platform.OS==="web" && !!window.CuidaliNative?.biometric && <Button label="Entrar com biometria" tone="light" onPress={()=>window.CuidaliNative?.biometric?.(false)} />}
+          <Button label="Esqueci minha senha" tone="light" onPress={()=>setRecovery(true)} />
           <Button
             label="Não tenho conta · Criar conta"
             tone="light"
@@ -359,6 +373,7 @@ function Auth({ onLogin }: { onLogin: (user: User) => void }) {
           />
         </>
       )}
+      <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:16,paddingVertical:12}}>{(["terms","privacy"] as const).map(kind=><Pressable key={kind} accessibilityRole="button" onPress={()=>setLegal(kind)} style={{minHeight:48,justifyContent:"center"}}><Text style={{fontSize:16,color:colors.blue,textDecorationLine:"underline"}}>{kind==="terms"?"Termos de Uso":"Política de Privacidade"}</Text></Pressable>)}</View>
     </>
   );
 }
@@ -420,17 +435,18 @@ function Home({
               </Text>
             )}
           </Card>
-          <Alerts elder={elder} caregiver={user.role === "caregiver"} />
+          {user.role === "caregiver" && <Alerts elder={elder} caregiver />}
           {user.role === "caregiver" && <Card><Text style={s.subtitle}>Acompanhamento de atividade</Text><Form fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]} submit="Salvar acompanhamento" onSave={async v=>{await api(`/elders/${elder}/settings`,"PATCH",{inactivity_hours:Number(v.inactivity_hours)});setMessage("Acompanhamento atualizado.");state.reload();}} /></Card>}
-          {user.role === "elder" && <Button label="Estou bem · registrar presença" onPress={async()=>{await api(`/elders/${elder}/activity`,"POST");setMessage("Presença registrada.");state.reload();}} />}
+          {user.role === "elder" && <Button label="Estou bem hoje" onPress={async()=>{await api(`/elders/${elder}/activity`,"POST");setMessage("Seu cuidador já pode ver que você está bem hoje.");state.reload();}} />}
           <Text style={s.subtitle}>Remédios de hoje</Text>
           {!state.data.doses.length && (
             <Text style={s.text}>Nenhuma dose prevista para hoje.</Text>
           )}
           {state.data.doses.map((d: any) => (
             <Card key={d.time_id} tone="blue">
+              <Image source={require("./assets/prototype/pills.png")} style={{width:54,height:48}} resizeMode="contain" />
               <Text style={s.subtitle}>
-                ♧ {d.time} · {d.name}
+                {d.time} · {d.name}
               </Text>
               <Text style={s.text}>{d.dosage}</Text>
               <Text style={s.text}>{statusLabel[d.status]}</Text>
@@ -456,7 +472,7 @@ function Home({
             <Text style={s.text}>Nenhuma consulta marcada para hoje.</Text>
           )}
           {state.data.appointments.map((a: any) => (
-            <Card key={a.id} tone="yellow">
+            <Card key={a.id} tone="yellow"><Image source={require("./assets/prototype/calendar.png")} style={{width:48,height:56}} resizeMode="contain" />
               <Text style={s.subtitle}>
                 {a.doctor} · {a.specialty}
               </Text>
@@ -522,7 +538,7 @@ function Resources({
     [editing, setEditing] = useState<any>(null),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
-  const canWrite = user.role === "caregiver" || kind === "contacts";
+  const canWrite = true;
   const label = {
     medications: "Medicamentos",
     appointments: "Consultas",
@@ -559,6 +575,7 @@ function Resources({
         <Loading state={state} />
       ) : editing ? (
         <Card>
+          <BackButton label="Voltar aos registros" onPress={()=>setEditing(null)} />
           <Text style={s.subtitle}>{editing.id ? "Editar" : "Adicionar"}</Text>
           <Form
             key={editing.id || "new"}
@@ -887,7 +904,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
               ))}
             </View>
             <Text style={s.muted}>
-              Direita e esquerda são sempre os lados da pessoa que sente a dor.
+              Toque onde dói. Selecione a frente ou as costas para encontrar a região.
             </Text>
             <BodyMap
               view={view}
@@ -1287,7 +1304,7 @@ function Assistant({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) 
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
   async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value});setDraft("");setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
   return <><Text style={s.title}>Seu assistente</Text><Text style={s.text}>Consulte seus medicamentos, consultas e cuidados por texto ou voz.</Text>
-    {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.subtitle}>Cuidali</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
+    {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.muted}>Resposta</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
     <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
     <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
     <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
@@ -1342,10 +1359,14 @@ export default function App() {
   const [setup, setSetup] = useState(false);
   const [user, setUser] = useState<User | null>(null),
     [starting, setStarting] = useState(true),
-    [tab, setTab] = useState("Início"),
+    [tab, setTabState] = useState("Início"),
     [elder, setElder] = useState(0),
     [sessionMessage, setSessionMessage] = useState(""),
     [logoutBusy, setLogoutBusy] = useState(false);
+  const navigationHistory = useRef<string[]>([]);
+  const currentTab = useRef("Início");
+  function setTab(next:string){if(next!==currentTab.current){navigationHistory.current.push(currentTab.current);currentTab.current=next;setTabState(next);}}
+  function goBack(){const previous=navigationHistory.current.pop() || "Início";currentTab.current=previous;setTabState(previous);}
   const sessionGeneration = useRef(0);
   function loggedIn(u: User) {
     sessionGeneration.current++;
@@ -1444,10 +1465,15 @@ export default function App() {
           }}
         />
       );
+    else if (["Termos de Uso","Política de Privacidade"].includes(tab)) screen=<LegalInformation kind={tab==="Termos de Uso"?"terms":"privacy"} onBack={goBack} />;
+    else if (tab === "Meus dados") screen=<AccountProfile user={user} onSaved={setUser} />;
     else if (tab === "Cuidados")
       screen = (
         <>
-          <Text style={s.title}>Seus cuidados</Text>
+          <Text style={s.title}>Seu espaço de cuidado</Text>
+          <Text style={s.text}>Seus dados e sua rotina, sempre à mão.</Text>
+          <Button label="Meus dados" tone="light" onPress={()=>setTab("Meus dados")} />
+          <Button label="Termos de Uso" tone="light" onPress={()=>setTab("Termos de Uso")} /><Button label="Política de Privacidade" tone="light" onPress={()=>setTab("Política de Privacidade")} />
           {["Medicamentos", "Consultas", "Contatos", "Dores", "Vínculos"].map(
             (t) => (
               <Button key={t} label={t} onPress={() => setTab(t)} />
@@ -1529,12 +1555,13 @@ export default function App() {
                     onPress={() => setTab("Vínculos")}
                   />
                 )}{" "}
+                {!["Início","Termos de Uso","Política de Privacidade"].includes(tab) && <BackButton onPress={goBack} />}
                 <Reminders user={user} navigate={setTab} />
                 {screen}
               </>
             ) : (
               <>
-                <Auth onLogin={loggedIn} />
+                <Auth onLogin={loggedIn} onScreenChange={()=>scroll.current?.scrollTo({y:0,animated:false})} />
                 {!androidWebPackage && <Button label="Configurar servidor" tone="light" onPress={() => setSetup(true)} />}
               </>
             )}
@@ -1576,7 +1603,7 @@ export default function App() {
                         "Vínculos",
                       ].includes(tab)),
                 }}
-                accessibilityLabel={t}
+                accessibilityLabel={t==="Cuidados"?"Idoso":t}
                 onPress={() => setTab(t)}
                 style={{
                   flex: 1,
@@ -1586,13 +1613,14 @@ export default function App() {
                   padding: 4,
                 }}
               >
+                {t==="Cuidados" && <Image source={require("./assets/prototype/elder.png")} style={{width:28,height:36}} resizeMode="contain" />}
                 <Text
                   style={{
                     fontSize: 22,
                     color: t === "SOS" ? colors.red : colors.blue,
                   }}
                 >
-                  {{ Início: "⌂", Assistente: "☏", SOS: "⚠", Cuidados: "♧" }[t]}
+                  {t==="Cuidados" ? "" : { Início: "⌂", Assistente: "◯", SOS: "⚠" }[t]}
                 </Text>
                 <Text
                   style={{
@@ -1612,7 +1640,7 @@ export default function App() {
                         : "400",
                   }}
                 >
-                  {t}
+                  {t==="Cuidados"?"Idoso":t}
                 </Text>
               </Pressable>
             ))}

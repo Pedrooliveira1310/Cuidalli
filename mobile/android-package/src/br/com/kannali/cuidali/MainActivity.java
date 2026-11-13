@@ -518,7 +518,7 @@ public final class MainActivity extends Activity {
     public final class NativeBridge {
         @android.webkit.JavascriptInterface public void openDialer(String phone){if(!phone.matches("\\+?[0-9]{8,15}"))return;runOnUiThread(()->{try{startActivity(new Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+phone)));}catch(ActivityNotFoundException e){new AlertDialog.Builder(MainActivity.this).setMessage("Discador indisponível neste aparelho.").setPositiveButton("OK",null).show();}});}
 
-        @android.webkit.JavascriptInterface public String restoreSession(){try{return SecureSession.load(MainActivity.this);}catch(Exception e){return "";}}
+        @android.webkit.JavascriptInterface public String restoreSession(){try{return BiometricSession.enabled(MainActivity.this)?"":SecureSession.load(MainActivity.this);}catch(Exception e){return "";}}
 
         @android.webkit.JavascriptInterface public void setMonitoring(boolean enabled){runOnUiThread(()->{getSharedPreferences("care",0).edit().putBoolean("enabled",enabled).apply();if(enabled){if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},78);else startCare();}else NativeNotifications.disable(MainActivity.this);});}
 
@@ -538,15 +538,18 @@ public final class MainActivity extends Activity {
 
         }catch(Exception e){new AlertDialog.Builder(MainActivity.this).setMessage("Não foi possível abrir a agenda neste aparelho.").setPositiveButton("OK",null).show();}});}
 
+        @android.webkit.JavascriptInterface public boolean biometricAvailable(){return BiometricSession.available(MainActivity.this);}
+        @android.webkit.JavascriptInterface public void biometric(boolean enroll){runOnUiThread(()->BiometricSession.authenticate(MainActivity.this,enroll,(token,message)->{if(web!=null)web.evaluateJavascript("window.dispatchEvent(new CustomEvent('cuidali-biometric',{detail:{token:"+JSONObject.quote(token)+",message:"+JSONObject.quote(message)+"}}));",null);}));}
+        @android.webkit.JavascriptInterface public void disableBiometric(){BiometricSession.clear(MainActivity.this);}
         @android.webkit.JavascriptInterface public void configureSession(String token){
 
             if(!token.isEmpty()&&!token.matches("[a-f0-9]{64}"))return;
 
-            try{SecureSession.save(MainActivity.this,token);}catch(Exception e){return;}
+            try{if(!token.equals(SecureSession.load(MainActivity.this)))BiometricSession.clear(MainActivity.this);SecureSession.save(MainActivity.this,token);}catch(Exception e){return;}
 
             runOnUiThread(()->{
 
-                if(token.isEmpty()){NativeNotifications.disable(MainActivity.this);return;}
+                if(token.isEmpty()){BiometricSession.clear(MainActivity.this);NativeNotifications.disable(MainActivity.this);return;}
 
                 getSharedPreferences("care",0).edit().putString("server",activeServer).putString("user",Integer.toHexString(token.hashCode())).apply();
 

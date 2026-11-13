@@ -26,41 +26,45 @@ import {
   numericMask,
 } from "./validation";
 export const FormBusy = createContext(false);
+export function BackButton({onPress,label='Voltar'}:{onPress:()=>void;label?:string}) {
+ return <Pressable accessibilityRole="button" accessibilityLabel={'Voltar'+(label==='Voltar'?'':' · '+label)} onPress={onPress} style={{minHeight:48,alignSelf:'flex-start',flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:8,paddingVertical:8}}><Text style={{fontSize:28,color:colors.blue}}>←</Text><Text style={{fontSize:18,fontWeight:'600',color:colors.blue}}>{label}</Text></Pressable>;
+}
 export const colors = {
-  blue: "#3B659D",
+  blue: "#39639A",
   dark: "#1A365D",
-  light: "#CEE1F4",
-  yellow: "#F3D7A0",
+  light: "#D3E2EF",
+  yellow: "#F2D6A2",
   red: "#9E3131",
   green: "#267244",
-  bg: "#F7FAFC",
+  bg: "#F6F7F2",
 };
 export const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bg },
   content: {
     padding: 24,
+    paddingTop: 32,
     paddingBottom: 40,
     gap: 16,
     width: "100%",
-    maxWidth: 620,
+    maxWidth: 680,
     alignSelf: "center",
   },
-  title: { fontSize: 28, fontWeight: "700", color: colors.dark },
+  title: { fontSize: 30, lineHeight: 38, fontWeight: "700", color: colors.dark },
   subtitle: { fontSize: 22, fontWeight: "700", color: colors.dark },
   text: { fontSize: 18, color: "#303842", lineHeight: 26 },
   muted: { fontSize: 16, color: "#555D67", lineHeight: 23 },
   card: {
     padding: 20,
-    borderRadius: 22,
+    borderRadius: 25,
     backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#D5DAE1",
+    borderColor: "#D3E2EF",
     gap: 12,
   },
   button: {
-    minHeight: 56,
+    minHeight: 60,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: colors.blue,
     justifyContent: "center",
     alignItems: "center",
@@ -154,13 +158,15 @@ export type Field = {
 function kindOf(f: Field) {
   return f.key === "scheduled_at"
     ? "datetime-local"
-    : /date$/.test(f.key)
+    : f.key === "email" ? "email" : /date$/.test(f.key)
       ? "date"
       : "text";
 }
 function maxOf(f: Field) {
   if (kindOf(f) === "date") return 10;
   if (kindOf(f) === "datetime-local") return 16;
+  if (f.key === "recovery_code") return 6;
+  if (f.key === "email") return 254;
   if (f.phone) return 30;
   if (f.secure) return 72;
   if (f.key === "code") return 12;
@@ -228,7 +234,9 @@ export function Form({
         missing = true;
         continue;
       }
+      if (f.optional && !raw) continue;
       if (f.toggle) continue;
+      if (f.key === "email" && raw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) issues.email="Informe um e-mail válido.";
       if (f.phone && !/^[0-9]{10,15}$/.test(raw.replace(/[\s()+. -]/g, "")))
         issues[f.key] = "Informe telefone com DDD (10 a 15 dígitos).";
       if (f.key === "code" && !/^[A-F0-9]{12}$/.test(raw))
@@ -335,10 +343,10 @@ export function Form({
     const autoComplete = f.phone
       ? "tel"
       : f.secure
-        ? submit === "Criar conta"
+        ? ["Criar conta","Salvar nova senha"].includes(submit)
           ? "new-password"
           : "current-password"
-        : /name/.test(f.key)
+        : f.key === "email" ? "email" : /name/.test(f.key)
           ? "name"
           : "off";
     const update = (v: string) => {
@@ -478,12 +486,7 @@ export function Form({
               input(f)
             )}
             {f.secure && (
-              <Button
-                label={shown ? "Ocultar senha" : "Mostrar senha"}
-                disabled={busy}
-                tone="light"
-                onPress={() => setShown(!shown)}
-              />
+              <Pressable accessibilityRole="button" accessibilityLabel={shown ? "Ocultar senha" : "Mostrar senha"} disabled={busy} onPress={()=>setShown(!shown)} style={{minHeight:48,alignSelf:"flex-end",justifyContent:"center",paddingHorizontal:8}}><Text style={{fontSize:16,color:colors.blue,fontWeight:"600"}}>{shown ? "Ocultar senha" : "Mostrar senha"}</Text></Pressable>
             )}
             {!!errors[f.key] && (
               <Text accessibilityRole="alert" style={styles.error}>

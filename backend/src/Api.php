@@ -67,10 +67,12 @@ final class Api {
         if ($method==='GET' && $path==='/health') { $this->query('SELECT 1'); return ['status'=>'ok','timezone'=>date_default_timezone_get()]; }
         if ($method==='POST' && $path==='/auth/register') return $this->register($data,$ip);
         if ($method==='POST' && $path==='/auth/login') return $this->login($data,$ip);
+        if ($method==='POST' && in_array($path,['/auth/forgot-password','/auth/reset-password'],true)) { $this->rate('recovery:ip:'.$ip,12); $this->rate('recovery:email:'.strtolower(trim((string)($data['email']??''))),8); return (new PasswordRecovery($this->db))->handle($path,$data); }
         if (!preg_match('/^Bearer ([a-f0-9]{64})$/',$authorization,$m)) $this->fail(401,'Entre novamente para continuar.');
         $hash=hash('sha256',$m[1]);
-        $this->user=$this->query('SELECT u.id,u.role,u.name,u.birth_date,u.phone FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP()',[$hash])->fetch() ?: [];
+        $this->user=$this->query('SELECT u.id,u.role,u.name,u.birth_date,u.phone,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP()',[$hash])->fetch() ?: [];
         if (!$this->user) $this->fail(401,'Sessão expirada. Entre novamente.');
+        if ($method==='PATCH' && $path==='/me') return $this->editProfile($data);
         if ($method==='GET' && $path==='/me') return ['user'=>$this->user];
         if ($method==='POST' && $path==='/auth/logout') { $this->query('DELETE FROM sessions WHERE token_hash=?',[$hash]); return ['message'=>'Você saiu da conta.']; }
         if ($path==='/push-tokens') return $this->pushDevices($method,$data,$hash);
@@ -122,25 +124,44 @@ final class Api {
         if ($resource==='pains') return $this->pains($method,$elder,$id,$data,$seen);
         $this->fail(405,'Método não permitido.');
     }
+    private function email(array $data):?string {
+        $email=strtolower(trim(is_string($data['email']??null)?$data['email']:''));
+        if($email==='')return null;
+        if(strlen($email)>254||!filter_var($email,FILTER_VALIDATE_EMAIL))$this->fail(422,'Informe um e-mail válido.');
+        return $email;
+    }
+    private function editProfile(array $data):array {
+        $name=$this->text($data,'name');$birth=$this->date($data,'birth_date');$phone=$this->phone($data);$email=$this->email($data);
+        if($birth<'1900-01-01'||$birth>date('Y-m-d'))$this->fail(422,'Data de nascimento inválida.');
+        $q=$this->query('SELECT * FROM users WHERE id=?',[$this->user['id']]);$old=$q->fetch();
+        if($phone!==$old['phone']||$email!==$old['email']){
+            $password=$this->text($data,'current_password',72);
+            if(!password_verify($password,$old['password_hash']))$this->fail(403,'Confira sua senha atual para alterar telefone ou e-mail.');
+        }
+        try{$this->query('UPDATE users SET name=?,birth_date=?,phone=?,email=? WHERE id=?',[$name,$birth,$phone,$email,$this->user['id']]);}
+        catch(PDOException $e){if(($e->errorInfo[1]??0)===1062)$this->fail(409,'Este telefone ou e-mail já está em uso.');throw $e;}
+        return ['message'=>'Seus dados foram atualizados.','user'=>$this->query('SELECT id,role,name,birth_date,phone,email FROM users WHERE id=?',[$this->user['id']])->fetch()];
+    }
     private function register(array $data,string $ip): array {
         $this->rate('register:'.$ip,20);
         $role=$this->enum($data,'role',['elder','caregiver']); $name=$this->text($data,'name'); $birth=$this->date($data,'birth_date');
         if ($birth>(new DateTimeImmutable('now',new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d') || $birth<'1900-01-01') $this->fail(422,'Data de nascimento inválida.');
         $phone=$this->phone($data); $password=$this->text($data,'password',72);
         if ($this->length($password)<8) $this->fail(422,'A senha deve ter ao menos 8 caracteres e no máximo 72 bytes.');
+        $email=$this->email($data);
         $contact=null;
         if ($role==='elder') {
             if (!isset($data['emergency_contact']) || !is_array($data['emergency_contact'])) $this->fail(422,'Informe o contato de emergência.');
             $c=$data['emergency_contact']; $contact=[$this->text($c,'name'),$this->phone($c),$this->text($c,'relationship',60)];
         }
         try {
-            return $this->transaction(function () use($role,$name,$birth,$phone,$password,$contact) {
-                $this->query('INSERT INTO users(role,name,birth_date,phone,password_hash) VALUES(?,?,?,?,?)',[$role,$name,$birth,$phone,password_hash($password,PASSWORD_DEFAULT)]);
+            return $this->transaction(function () use($role,$name,$birth,$phone,$password,$contact,$email) {
+                $this->query('INSERT INTO users(role,name,birth_date,phone,password_hash,email) VALUES(?,?,?,?,?,?)',[$role,$name,$birth,$phone,password_hash($password,PASSWORD_DEFAULT),$email]);
                 $id=(int)$this->db->lastInsertId();
                 if ($contact) $this->query('INSERT INTO contacts(elder_id,name,phone,relationship,is_primary) VALUES(?,?,?,?,1)',[$id,...$contact]);
                 http_response_code(201); return ['id'=>$id,'message'=>'Conta criada. Entre com telefone e senha.'];
             });
-        } catch(PDOException $e) { if (($e->errorInfo[1]??0)===1062) $this->fail(409,'Este telefone já possui uma conta.'); throw $e; }
+        } catch(PDOException $e) { if (($e->errorInfo[1]??0)===1062) $this->fail(409,'Este telefone ou e-mail já possui uma conta.'); throw $e; }
     }
     private function login(array $data,string $ip): array {
         $phone=$this->phone($data); $password=$this->text($data,'password',72);
@@ -158,7 +179,6 @@ final class Api {
             foreach($items as &$item) $item['times']=$this->query('SELECT id,TIME_FORMAT(time,"%H:%i") AS time FROM medication_times WHERE medication_id=? AND active=1 ORDER BY time',[$item['id']])->fetchAll();
             return ['items'=>$items];
         }
-        $this->role('caregiver');
         if ($id) { $row=$this->item('medications',$id,$elder); if ($method==='PATCH' && !(int)$row['active']) $this->fail(409,'Medicamento desativado. Atualize a lista.'); }
         if ($method==='DELETE' && $id) {
             $this->query('UPDATE medications SET active=0 WHERE id=?',[$id]); $this->activity($elder,'medication_deactivated'); return ['message'=>'Medicamento desativado; histórico preservado.'];
@@ -192,7 +212,7 @@ final class Api {
     }
     private function appointments(string $method,int $elder,int $id,array $data): array {
         if ($method==='GET') return ['items'=>$id?[$this->item('appointments',$id,$elder)]:$this->query('SELECT * FROM appointments WHERE elder_id=? ORDER BY scheduled_at',[$elder])->fetchAll()];
-        $this->role('caregiver'); if ($id) { $row=$this->item('appointments',$id,$elder); if ($method==='PATCH' && (int)$row['cancelled']) $this->fail(409,'Consulta cancelada. Atualize a lista.'); }
+        if ($id) { $row=$this->item('appointments',$id,$elder); if ($method==='PATCH' && (int)$row['cancelled']) $this->fail(409,'Consulta cancelada. Atualize a lista.'); }
         if ($method==='DELETE'&&$id) { $this->query('UPDATE appointments SET cancelled=1 WHERE id=?',[$id]); $this->activity($elder,'appointment_cancelled'); return ['message'=>'Consulta cancelada.']; }
         if (!(($method==='POST'&&!$id)||($method==='PATCH'&&$id))) $this->fail(405,'Método não permitido.');
         $doctor=$this->text($data,'doctor'); $specialty=$this->text($data,'specialty'); $location=$this->text($data,'location',200); $at=$this->text($data,'scheduled_at',16);
@@ -342,8 +362,9 @@ final class Api {
             } elseif (preg_match('/(consulta|agenda|medico)/',$q)) {
                 $a=$this->query('SELECT * FROM appointments WHERE elder_id=? AND cancelled=0 AND scheduled_at>=UTC_TIMESTAMP() ORDER BY scheduled_at LIMIT 3',[$elder])->fetchAll();
                 $reply=$a ? 'Próximas consultas: '.implode('; ',array_map(fn($x)=>$x['specialty'].' em '.(new DateTimeImmutable($x['scheduled_at'],new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i').' em '.$x['location'],$a)) : 'Você não tem próximas consultas cadastradas.'; $action='Consultas';
-            } elseif (preg_match('/(dia|data|hoje|hora)/',$q)) $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
-            else $reply='Posso consultar seus medicamentos, próximas consultas e a data de hoje, ou abrir Dores e SOS. O que você gostaria de consultar?';
+            } elseif (preg_match('/^(?:(?:por favor|oi|ola)[ ,]*)?(?:que (?:dia|horas?) (?:e|sao)(?: hoje| agora)?|qual (?:e )?(?:a data|o dia|o horario|a hora)(?: de hoje| atual)?|hora atual|data de hoje)[?!., ]*$/',$q)) $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
+            elseif(preg_match('/^(oi|ola|bom dia|boa tarde|boa noite|como pode me ajudar|o que voce faz)[?!., ]*$/',$q)) $reply='Olá! Posso consultar seus medicamentos e consultas, informar a data e a hora atuais ou ajudar a abrir Dores e SOS. Como posso ajudar?';
+            else $reply='Não tenho acesso a programação de TV, notícias ou outras informações externas. Posso consultar seus medicamentos, suas consultas, a data e a hora atuais, ou abrir Dores e SOS. O que você gostaria de consultar?';
             $this->query('INSERT INTO assistant_messages(elder_id,content,reply) VALUES(?,?,?)',[$elder,$message,$reply]);
             if($this->user['role']==='elder') $this->activity($elder,'assistant_used');
             return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d')];

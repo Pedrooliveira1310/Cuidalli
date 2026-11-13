@@ -18,6 +18,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   ).toBeVisible();
   const elderFields: Record<string, string> = {
     "Nome completo": "Idoso fictício E2E",
+    "E-mail para recuperação": "e2e"+suffix+"@example.com",
     Nascimento: "1960-05-01",
     "Telefone com DDD": elderPhone,
     "Senha (8 a 72 caracteres)": password,
@@ -56,7 +57,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     },
   });
   expect(register.status()).toBe(201);
-  await page.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await page.getByRole("tab", { name: "Idoso", exact: true }).click();
   await page.getByRole("button", { name: "Vínculos", exact: true }).click();
   await page
     .getByRole("button", { name: "Gerar código por 10 minutos" })
@@ -118,7 +119,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await caregiver.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(caregiver.getByText("Medicamento salvo.")).toBeVisible();
   await page.getByRole("tab", { name: "Início", exact: true }).click();
-  await expect(page.getByText("♧ 08:00 · Remédio E2E")).toBeVisible();
+  await expect(page.getByText("08:00 · Remédio E2E")).toBeVisible();
   await page
     .getByRole("button", { name: "Ainda não", exact: true })
     .first()
@@ -145,7 +146,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
       "Dor registrada. Seus cuidadores podem acompanhar o registro e o alerta.",
     ),
   ).toBeVisible();
-  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await caregiver.getByRole("tab", { name: "Idoso", exact: true }).click();
   await caregiver.getByRole("button", { name: "Dores", exact: true }).click();
   await expect(caregiver.getByText("4/10 · Joelho esquerdo")).toBeVisible();
   await caregiver
@@ -167,7 +168,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     fullPage: true,
   });
   // Consultas e contatos também usam a API real do banco isolado.
-  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await caregiver.getByRole("tab", { name: "Idoso", exact: true }).click();
   await caregiver
     .getByRole("button", { name: "Consultas", exact: true })
     .click();
@@ -197,7 +198,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     .getByRole("button", { name: "Cancelar consulta", exact: true })
     .click();
   await expect(caregiver.getByText("Consulta cancelada.")).toBeVisible();
-  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
+  await caregiver.getByRole("tab", { name: "Idoso", exact: true }).click();
   await caregiver
     .getByRole("button", { name: "Contatos", exact: true })
     .click();
@@ -247,7 +248,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   const sosCard=caregiver.getByText('Pedido de ajuda',{exact:true}).locator('..');
   await sosCard.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
   await expect(sosCard.getByText(/Em acompanhamento/)).toBeVisible();
-  await page.getByRole('button',{name:'Atualizar lista',exact:true}).click();
+  await page.getByRole('button',{name:'↻ Ver registros mais recentes',exact:true}).click();
   await expect(page.getByText('Acompanhado por Cuidador fictício E2E',{exact:true})).toBeVisible({timeout:20000});
   await page.reload();
   await expect(page.getByRole('tab',{name:'Início',exact:true})).toBeVisible();

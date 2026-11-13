@@ -1,0 +1,34 @@
+import {test,expect} from '@playwright/test';
+const base=process.env.E2E_API_URL||'http://127.0.0.1:8010';
+test('entrada, recuperação e textos de privacidade são acessíveis',async({page})=>{
+ await page.goto('/');
+ await expect(page.getByLabel('Logo Cuidali: cuidado entre gerações')).toBeVisible();
+ await page.getByRole('button',{name:'Já tenho conta · Entrar',exact:true}).click();
+ await page.getByRole('button',{name:'Esqueci minha senha',exact:true}).click();
+ await expect(page.getByText('Recuperar minha senha',{exact:true})).toBeVisible();
+ await expect(page.getByLabel('E-mail cadastrado',{exact:true})).toHaveAttribute('type','email');
+ await page.getByRole('button',{name:'Voltar · Voltar para entrar',exact:true}).click();
+ await page.getByRole('button',{name:'Política de Privacidade',exact:true}).click();
+ await expect(page.getByText('Quais dados usamos',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Voltar',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Esqueci minha senha',exact:true})).toBeVisible();
+ await page.screenshot({path:'test-results/redesign-entrada.png',fullPage:true});
+});
+test('idoso edita seus dados e cadastra medicamento e consulta',async({page,request})=>{
+ const suffix=String(Date.now()).slice(-8),phone='116'+suffix,email='redesign'+suffix+'@example.com',password='TesteCuidali123';
+ const r=await request.post(base+'/auth/register',{data:{role:'elder',name:'Pessoa de teste visual',phone,email,password,birth_date:'1960-01-01',emergency_contact:{name:'Contato fictício',phone:'11900000000',relationship:'Teste'}}});expect(r.status()).toBe(201);
+ await page.goto('/');await page.getByRole('button',{name:'Já tenho conta · Entrar',exact:true}).click();
+ await page.getByLabel('Telefone com DDD',{exact:true}).fill(phone);await page.getByLabel('Senha',{exact:true}).fill(password);await page.getByRole('button',{name:'Entrar',exact:true}).click();
+ await page.getByRole('tab',{name:'Idoso',exact:true}).click();await page.getByRole('button',{name:'Meus dados',exact:true}).click();
+ await page.getByLabel('Nome completo',{exact:true}).fill('Nome corrigido');await page.getByRole('button',{name:'Salvar meus dados',exact:true}).click();await expect(page.getByText('Seus dados foram atualizados.',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Voltar',exact:true}).click();await page.getByRole('button',{name:'Medicamentos',exact:true}).click();
+ await page.getByRole('button',{name:'Adicionar medicamento',exact:true}).click();
+ await page.getByLabel('Medicamento',{exact:true}).fill('Medicamento cadastrado pelo idoso');await page.getByLabel('Dosagem',{exact:true}).fill('1 comprimido');
+ await page.getByLabel('Início do uso',{exact:true}).fill('2026-11-13');await page.getByLabel('Fim do uso',{exact:true}).fill('2026-12-13');await page.getByLabel('Horário 1',{exact:true}).fill('20:00');
+ await page.getByRole('button',{name:'Salvar',exact:true}).click();await expect(page.getByText('Medicamento salvo.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Editar',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Voltar',exact:true}).click();await page.getByRole('button',{name:'Consultas',exact:true}).click();await page.getByRole('button',{name:'Adicionar consulta',exact:true}).click();
+ await page.getByLabel('Médico(a)',{exact:true}).fill('Dra. Teste');await page.getByLabel('Especialidade',{exact:true}).fill('Clínica geral');await page.getByLabel('Data e hora (São Paulo)',{exact:true}).fill('2026-12-01T14:00');await page.getByLabel('Local',{exact:true}).fill('Clínica fictícia');
+ await page.getByRole('button',{name:'Salvar',exact:true}).click();await expect(page.getByText('Consulta salva.',{exact:true})).toBeVisible();
+ await page.getByRole('tab',{name:'Início',exact:true}).click();await expect(page.getByText('Olá, Nome',{exact:true})).toBeVisible();await page.screenshot({path:'test-results/redesign-inicio.png',fullPage:true});
+});
