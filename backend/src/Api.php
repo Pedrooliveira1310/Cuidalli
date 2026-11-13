@@ -267,7 +267,7 @@ final class Api {
 
     public function runMonitoring(): void {
         foreach($this->query("SELECT id FROM users WHERE role='elder'")->fetchAll(PDO::FETCH_COLUMN) as $id) $this->scanInactivity((int)$id);
-        $push=new PushService($this->db);$push->queue();$push->deliver();
+        $push=new PushService($this->db);$push->queue();$sent=$push->deliver();if($sent)error_log('Cuidali push: '.$sent.' aviso(s) enviado(s).');
     }
     private function pushDevices(string $method,array $data,string $sessionHash):array {
         $token=$this->text($data,'token',4096);

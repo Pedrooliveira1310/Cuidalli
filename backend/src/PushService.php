@@ -25,7 +25,7 @@ final class PushService {
   $unsigned=$header.'.'.$claims;$signature='';
   if(!openssl_sign($unsigned,$signature,$account['private_key'],OPENSSL_ALGO_SHA256))return null;
   [$status,$data]=$this->http('https://oauth2.googleapis.com/token',['Content-Type: application/x-www-form-urlencoded'],http_build_query(['grant_type'=>'urn:ietf:params:oauth:grant-type:jwt-bearer','assertion'=>$unsigned.'.'.$base64($signature)]));
-  if($status!==200||empty($data['access_token']))return null;
+  if($status!==200||empty($data['access_token'])){error_log('Cuidali push: autenticação do emissor indisponível (HTTP '.$status.').');return null;}
   self::$accessToken=$data['access_token'];self::$tokenExpires=time()+(int)$data['expires_in'];return self::$accessToken;
  }
  public function deliver():int{
@@ -35,11 +35,11 @@ final class PushService {
   $sent=0;
   $jobs=$this->query("SELECT o.*,d.token,d.platform,d.user_id FROM push_outbox o JOIN push_devices d ON d.id=o.device_id JOIN sessions s ON s.token_hash=d.session_hash AND s.expires_at>UTC_TIMESTAMP() WHERE o.delivered_at IS NULL AND o.attempts<6 AND o.next_attempt<=UTC_TIMESTAMP() AND (d.user_id=o.elder_id OR EXISTS(SELECT 1 FROM care_links l WHERE l.elder_id=o.elder_id AND l.caregiver_id=d.user_id)) ORDER BY o.id LIMIT 100")->fetchAll();
   foreach($jobs as $job){
-   $message=['token'=>$job['token'],'notification'=>['title'=>$job['title'],'body'=>$job['body']],'data'=>['event_key'=>$job['event_key']],'android'=>['priority'=>'high','ttl'=>'300s','notification'=>['channel_id'=>'care-alerts','tag'=>$job['event_key'],'visibility'=>'PRIVATE']],'webpush'=>['fcm_options'=>['link'=>getenv('APP_PUBLIC_URL')?:'https://cuidali-production.up.railway.app'],'headers'=>['TTL'=>'300','Urgency'=>'high']]];
+   $message=['token'=>$job['token'],'data'=>['event_key'=>$job['event_key'],'title'=>$job['title'],'body'=>$job['body']],'android'=>['priority'=>'high','ttl'=>'300s','collapse_key'=>$job['event_key']],'webpush'=>['notification'=>['title'=>$job['title'],'body'=>$job['body'],'icon'=>'/icon.svg','tag'=>$job['event_key']],'fcm_options'=>['link'=>getenv('APP_PUBLIC_URL')?:'https://cuidali-production.up.railway.app'],'headers'=>['TTL'=>'300','Urgency'=>'high']]];
    [$status,$data]=$this->http('https://fcm.googleapis.com/v1/projects/'.rawurlencode($account['project_id']).'/messages:send',['Content-Type: application/json','Authorization: Bearer '.$access],json_encode(['message'=>$message],JSON_UNESCAPED_UNICODE));
    if($status===200){$this->query('UPDATE push_outbox SET delivered_at=UTC_TIMESTAMP(),attempts=attempts+1 WHERE id=?',[$job['id']]);$sent++;}
    elseif(str_contains(json_encode($data),'UNREGISTERED'))$this->query('DELETE FROM push_devices WHERE id=?',[$job['device_id']]);
-   else{$delay=min(3600,10*(2**(int)$job['attempts']));$this->query('UPDATE push_outbox SET attempts=attempts+1,next_attempt=DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? SECOND) WHERE id=?',[$delay,$job['id']]);if($status===401){self::$accessToken=null;break;}}
+   else{error_log('Cuidali push: envio adiado (HTTP '.$status.').');$delay=min(3600,10*(2**(int)$job['attempts']));$this->query('UPDATE push_outbox SET attempts=attempts+1,next_attempt=DATE_ADD(UTC_TIMESTAMP(),INTERVAL ? SECOND) WHERE id=?',[$delay,$job['id']]);if($status===401){self::$accessToken=null;break;}}
   }
   return $sent;
  }

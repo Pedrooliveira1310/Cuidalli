@@ -10,7 +10,7 @@ if (!$apiPath && $_SERVER['REQUEST_METHOD']==='GET') {
     $types=['html'=>'text/html; charset=utf-8','js'=>'application/javascript; charset=utf-8','css'=>'text/css; charset=utf-8','json'=>'application/json','webmanifest'=>'application/manifest+json','svg'=>'image/svg+xml','png'=>'image/png','woff2'=>'font/woff2','ico'=>'image/x-icon'];
     if($file&&str_starts_with($file,$webRoot.DIRECTORY_SEPARATOR)&&is_file($file)&&isset($types[$ext])) {
         header('Content-Type: '.$types[$ext]);header('X-Content-Type-Options: nosniff');
-        header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");header('Cache-Control: '.($ext==='html'||basename($file)==='sw.js'?'no-cache':'public, max-age=86400'));readfile($file);exit;
+        header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://fcm.googleapis.com; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");header('Cache-Control: '.($ext==='html'||basename($file)==='sw.js'?'no-cache':'public, max-age=86400'));readfile($file);exit;
     }
     http_response_code(404);header('Content-Type: text/plain; charset=utf-8');echo 'Página não encontrada.';exit;
 }
@@ -28,7 +28,8 @@ if ($origin && in_array($origin,$allowed,true)) {
 }
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 try {
-    $authorization=$_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $requestHeaders=function_exists('getallheaders')?array_change_key_case(getallheaders(),CASE_LOWER):[];
+    $authorization=$_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? $requestHeaders['authorization'] ?? '';
     if ($authorization==='' && isset($_COOKIE['cuidali_session']) && !in_array($requestPath,['/auth/login','/auth/register'],true)) {
         if (!in_array($_SERVER['REQUEST_METHOD'],['GET','OPTIONS'],true)) {
             $originHost=parse_url($_SERVER['HTTP_ORIGIN']??'',PHP_URL_HOST);
