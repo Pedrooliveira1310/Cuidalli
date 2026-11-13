@@ -21,10 +21,12 @@
 - Push e autorização: 18 verificações aprovadas.
 - Conta, medicamentos do idoso, intenção de horário e recuperação: 16 verificações aprovadas.
 - Navegador: 14 regressões existentes e 2 novos fluxos validados (uma expectativa de rótulo e uma seta superior foram corrigidas durante a revisão).
-- Tipagem TypeScript e primeira compilação Android com biometria aprovadas.
+- TypeScript e 7 testes unitários aprovados.
+- Compilação Android final de release com biometria, integridade dos arquivos e assinatura aprovadas. APK 1.1.0 (versão interna 6).
+- No endereço público: 5 fluxos reais aprovados. O fluxo completo de cuidados foi repetido com limite de 180 segundos para acomodar a conexão remota e passou em cerca de 1 minuto.
 
 ## Dependências finais
 
 O usuário solicitou preparar a configuração de e-mail. O código e as telas estão prontos; o envio real depende de conectar uma conta de e-mail transacional conforme Configurar-email-Cuidali.md. Não foi confirmado recebimento real de e-mail nesta atualização.
 
-A nova biometria ainda precisa de confirmação física no aparelho. O envio FCM da versão anterior foi confirmado pelo usuário.
+A nova biometria ainda precisa de confirmação física no aparelho; a instalação da atualização aguarda reconexão USB. O envio FCM da versão anterior foi confirmado pelo usuário.
