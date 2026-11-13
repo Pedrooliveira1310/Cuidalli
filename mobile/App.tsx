@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Pressable,
+  TextInput,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -20,6 +21,11 @@ import {
   restoreToken,
   setExpiredHandler,
   User,
+  getServer,
+  restoreServer,
+  checkServer,
+  saveServer,
+  androidWebPackage,
 } from "./src/api";
 import {
   FormBusy,
@@ -34,6 +40,7 @@ import {
   localInput,
   calendarDate,
 } from "./src/ui";
+import { speak, listen, calendar } from "./src/device";
 import { openDialer } from "./src/phone";
 const profileFields: Field[] = [
   { key: "name", label: "Nome completo" },
@@ -327,8 +334,7 @@ function Auth({ onLogin }: { onLogin: (user: User) => void }) {
           <Text style={s.text}>Entre para acompanhar seus cuidados.</Text>
           {Platform.OS === "web" && (
             <Text style={s.muted}>
-              No navegador, a sessão fica apenas na memória. No aplicativo,
-              usamos armazenamento seguro.
+              Acesse seus cuidados com telefone e senha.
             </Text>
           )}
           <Form
@@ -414,6 +420,9 @@ function Home({
               </Text>
             )}
           </Card>
+          <Alerts elder={elder} caregiver={user.role === "caregiver"} />
+          {user.role === "caregiver" && <Card><Text style={s.subtitle}>Acompanhamento de atividade</Text><Form fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]} submit="Salvar acompanhamento" onSave={async v=>{await api(`/elders/${elder}/settings`,"PATCH",{inactivity_hours:Number(v.inactivity_hours)});setMessage("Acompanhamento atualizado.");state.reload();}} /></Card>}
+          {user.role === "elder" && <Button label="Estou bem · registrar presença" onPress={async()=>{await api(`/elders/${elder}/activity`,"POST");setMessage("Presença registrada.");state.reload();}} />}
           <Text style={s.subtitle}>Remédios de hoje</Text>
           {!state.data.doses.length && (
             <Text style={s.text}>Nenhuma dose prevista para hoje.</Text>
@@ -456,6 +465,7 @@ function Home({
                 {"\n"}
                 {a.location}
               </Text>
+              <Button label="Adicionar à agenda" tone="light" onPress={()=>calendar(a)} />
             </Card>
           ))}
           <Button
@@ -1196,8 +1206,8 @@ function SOS({
       <Text style={s.title}>Precisa de ajuda?</Text>
       <Loading state={state} />
       <Text style={s.text}>
-        O SOS abre o discador com seu contato principal. Você precisa iniciar a
-        ligação no telefone.
+        O SOS envia um pedido de ajuda aos seus cuidadores. Você também pode ligar
+        para seu contato principal e iniciar a ligação no telefone.
       </Text>
       {contact ? (
         <Card>
@@ -1209,12 +1219,17 @@ function SOS({
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`SOS: abrir discador para ${contact.name}`}
+            accessibilityLabel={`SOS: pedir ajuda a ${contact.name}`}
             onPress={() =>
               confirmAction(
-                `Abrir o discador para ${contact.name}?`,
+                `Enviar pedido de ajuda aos cuidadores e ligar para ${contact.name}?`,
                 async () => {
-                  setMessage(await openDialer(contact.phone));
+                  try {
+                    const result = await api(`/elders/${elder}/sos`, "POST");
+                    setMessage(result.message + (Platform.OS !== "web" || window.CuidaliNative ? " " + await openDialer(contact.phone) : " Use Ligar para abrir o discador."));
+                  } catch (e) {
+                    setMessage("Não foi possível registrar o alerta. " + await openDialer(contact.phone));
+                  }
                 },
               )
             }
@@ -1230,6 +1245,7 @@ function SOS({
           >
             <Text style={[s.title, { color: colors.red }]}>☎ SOS</Text>
           </Pressable>
+          <Button label={`Ligar para ${contact.name}`} tone="light" onPress={async()=>setMessage(await openDialer(contact.phone))} />
         </Card>
       ) : (
         !state.loading &&
@@ -1245,66 +1261,85 @@ function SOS({
           </View>
         )
       )}
-      {!!message && (
-        <Text accessibilityRole="alert" style={s.text}>
-          {message}
-        </Text>
-      )}
-      <Text style={s.muted}>
-        Notificações remotas de emergência e monitoramento de inatividade estão
-        previstos para a sprint 3.
-      </Text>
+      {!contact && <Button label="Enviar pedido de ajuda aos cuidadores" tone="red" onPress={async()=>{try { const r=await api(`/elders/${elder}/sos`,"POST");setMessage(r.message); } catch(e) {setMessage((e as Error).message);} }} />}
+      <Alerts elder={elder} caregiver={false} />
+      {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
+      <Text style={s.muted}>Seus pedidos ficam disponíveis para os cuidadores vinculados acompanharem e confirmarem o atendimento.</Text>
     </>
   );
 }
-function Assistant({ navigate }: { navigate: (tab: string) => void }) {
-  const [answer, setAnswer] = useState("");
-  return (
-    <>
-      <Text style={s.title}>Assistente</Text>
-      <Text style={s.text}>Como posso te ajudar hoje?</Text>
-      <Text style={s.muted}>
-        Atalhos do Cuidali. Esta versão não usa inteligência artificial nem
-        reconhecimento de voz.
-      </Text>
-      <Button
-        label="Meus remédios"
-        tone="light"
-        onPress={() => navigate("Medicamentos")}
-      />
-      <Button
-        label="Minhas consultas"
-        tone="light"
-        onPress={() => navigate("Consultas")}
-      />
-      <Button
-        label="Que dia é hoje?"
-        tone="light"
-        onPress={() =>
-          setAnswer(
-            new Date().toLocaleDateString("pt-BR", {
-              timeZone: "America/Sao_Paulo",
-              dateStyle: "full",
-            }),
-          )
-        }
-      />
-      <Button
-        label="Preciso de ajuda"
-        tone="red"
-        onPress={() => navigate("SOS")}
-      />
-      {!!answer && (
-        <Card>
-          <Text accessibilityLiveRegion="polite" style={s.text}>
-            {answer}
-          </Text>
-        </Card>
-      )}
-    </>
-  );
+function Alerts({elder,caregiver}:{elder:number;caregiver:boolean}) {
+  const state=useData(`/elders/${elder}/alerts`),[message,setMessage]=useState("");
+  useEffect(()=>{const t=setInterval(state.reload,15000);return ()=>clearInterval(t);},[state.reload]);
+  const names:Record<string,string>={sos:"Pedido de ajuda",inactivity:"Ausência de atividade",pain:"Novo registro de dor"};
+  async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();}catch(e){setMessage((e as Error).message);}}
+  return <><Text style={s.subtitle}>Alertas e acompanhamento</Text>{!!state.error&&<Text style={s.error}>{state.error}</Text>}
+    {state.data?.items.length===0&&<Text style={s.text}>Nenhum alerta registrado.</Text>}
+    {state.data?.items.slice(0,15).map((a:any)=><Card key={a.id} tone={a.status==='resolved'?'blue':'yellow'}>
+      <Text style={s.subtitle}>{names[a.kind]}</Text><Text style={s.text}>{dateTime(a.created_at)} · {a.status==='open'?'Aguardando cuidador':a.status==='accepted'?'Em acompanhamento':'Concluído'}</Text>
+      {!!a.accepted_name&&<Text style={s.text}>Acompanhado por {a.accepted_name}</Text>}
+      {caregiver&&a.status==='open'&&<Button label="Vou acompanhar" onPress={()=>update(a.id,'accepted')} />}
+      {caregiver&&a.status!=='resolved'&&<Button label="Concluir atendimento" onPress={()=>confirmAction('Você verificou a situação e deseja concluir este alerta?',()=>update(a.id,'resolved'))} />}
+    </Card>)}{!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}</>;
+}
+function Assistant({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) {
+  const state=useData(`/elders/${elder}/assistant`),[message,setMessage]=useState(""),[draft,setDraft]=useState(""),[busy,setBusy]=useState(false),[action,setAction]=useState<string|null>(null),[confirmations,setConfirmations]=useState<any[]>([]),[doseDate,setDoseDate]=useState("");
+  const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
+  async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value});setDraft("");setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
+  return <><Text style={s.title}>Seu assistente</Text><Text style={s.text}>Consulte seus medicamentos, consultas e cuidados por texto ou voz.</Text>
+    {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.subtitle}>Cuidali</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
+    <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
+    <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
+    <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
+    {['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda'].map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
+    {confirmations.map((d:any)=><Button key={d.time_id} label={`Confirmar ${d.name} · ${d.time}`} onPress={()=>confirmAction(`Você tomou ${d.name}, ${d.dosage}, da dose das ${d.time}?`,async()=>{try{await api(`/elders/${elder}/doses/${d.time_id}`,"POST",{date:doseDate,status:"taken"});setConfirmations(v=>v.filter(x=>x.time_id!==d.time_id));setMessage("Dose confirmada.");}catch(e){setMessage((e as Error).message);}})} />)}
+    {!!action&&<Button label={'Abrir '+action} onPress={()=>navigate(action)}/>}{!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}
+    <Text style={s.muted}>O assistente consulta seus registros. Não faz diagnósticos nem altera prescrições.</Text></>;
+}
+function Reminders({user,navigate}:{user:User;navigate:(tab:string)=>void}) {
+  const [notice,setNotice]=useState<any>(null),[error,setError]=useState("");
+  const seen=useRef(new Set<string>());
+  useEffect(()=>{let alive=true;async function poll(){try{
+    const data=await api('/notifications');if(!alive)return;
+    if(user.role==='elder'){
+      const time=new Date().toLocaleTimeString('sv-SE',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'});
+      const due=data.doses.find((d:any)=>d.status!=='taken'&&d.time<=time&&!seen.current.has(data.date+':'+d.time_id));
+      if(due){seen.current.add(data.date+':'+due.time_id);setNotice({...due,date:data.date});speak(`Lembrete de medicamento. ${due.name}, ${due.dosage}. Confira a dose antes de confirmar.`);}
+    }else if(Platform.OS==='web'&&!window.CuidaliNative&&'Notification' in window&&Notification.permission==='granted'){
+      for(const a of data.items){const key='alert:'+a.id;if(!seen.current.has(key)){seen.current.add(key);new Notification(a.kind==='sos'?'Cuidali · Pedido de ajuda':'Cuidali · Novo aviso de cuidado',{body:'Abra o painel para acompanhar.',tag:key});}}
+    }
+  }catch{} }
+  poll();const timer=setInterval(poll,20000);return()=>{alive=false;clearInterval(timer);};},[user.id]);
+  if(!notice)return null;
+  async function confirm(status:string){try{await api(`/elders/${user.id}/doses/${notice.time_id}`,'POST',{date:notice.date,status});setNotice(null);setError('');navigate('Início');}catch(e){setError((e as Error).message);}}
+  return <Card tone="yellow"><Text accessibilityRole="header" style={s.subtitle}>Hora do seu cuidado</Text><Text style={s.text}>{notice.time} · {notice.name} · {notice.dosage}</Text><Text style={s.text}>Você já tomou esta dose?</Text><Button label="Já tomei esta dose" onPress={()=>confirm('taken')}/><Button label="Ainda não tomei" tone="light" onPress={()=>confirm('pending')}/><Button label="Ver medicamentos" tone="light" onPress={()=>{setNotice(null);navigate('Medicamentos');}}/>{!!error&&<Text style={s.error}>{error}</Text>}</Card>;
+}
+function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
+  const [address, setAddress] = useState(getServer());
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function connect() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { const server = await checkServer(address); await saveServer(server); onDone(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  return <Card>
+    <Text style={s.title}>Conectar o Cuidali</Text>
+    <Text style={s.text}>Peça à pessoa responsável pela instalação o endereço do servidor Cuidali.</Text>
+    <Text style={s.label}>Endereço do servidor</Text>
+    <TextInput accessibilityLabel="Endereço do servidor" style={s.input} value={address}
+      onChangeText={setAddress} autoCapitalize="none" autoCorrect={false} keyboardType="url"
+      placeholder="https://seu-servidor" editable={!busy} />
+    <Text style={s.muted}>Use o endereço fornecido pela sua organização para conectar seus cuidados.</Text>
+    {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
+    <Button label="Testar conexão e continuar" onPress={connect} busy={busy} />
+    {onCancel && <Button label="Voltar" onPress={onCancel} disabled={busy} tone="light" />}
+  </Card>;
 }
 export default function App() {
+  const [setup, setSetup] = useState(false);
   const [user, setUser] = useState<User | null>(null),
     [starting, setStarting] = useState(true),
     [tab, setTab] = useState("Início"),
@@ -1327,12 +1362,13 @@ export default function App() {
     });
     (async () => {
       try {
+        if (!(await restoreServer())) { setSetup(true); return; }
         if (await restoreToken()) {
           const r = await api("/me");
           loggedIn(r.user);
         }
       } catch (e) {
-        setSessionMessage((e as Error).message);
+        setSessionMessage(e instanceof ApiError && e.status===401 ? "" : (e as Error).message);
       } finally {
         setStarting(false);
       }
@@ -1411,6 +1447,9 @@ export default function App() {
               <Button key={t} label={t} onPress={() => setTab(t)} />
             ),
           )}
+          {Platform.OS === "web" && !window.CuidaliNative && typeof Notification !== 'undefined' && <Button label="Ativar avisos neste navegador" tone="light" onPress={async()=>{const permission=await Notification.requestPermission();setSessionMessage(permission==='granted'?"Avisos ativados enquanto o Cuidali estiver aberto neste navegador.":"Permissão de avisos não concedida.");}} />}
+          {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Ativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(true);setSessionMessage("Acompanhamento ativado neste aparelho.");}} />}
+          {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Desativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(false);setSessionMessage("Avisos desativados neste aparelho.");}} />}
           <Button
             label="Sair da conta"
             tone="red"
@@ -1419,7 +1458,7 @@ export default function App() {
           />
         </>
       );
-    else if (tab === "Assistente") screen = <Assistant navigate={setTab} />;
+    else if (tab === "Assistente" && elder) screen = <Assistant key={elder} elder={elder} navigate={setTab} />;
     else if (!elder)
       screen = (
         <>
@@ -1472,6 +1511,9 @@ export default function App() {
             )}
             {starting ? (
               <ActivityIndicator size="large" />
+            ) : setup ? (
+              <ServerSetup onDone={() => { setSetup(false); setSessionMessage(""); }}
+                onCancel={getServer() ? () => setSetup(false) : undefined} />
             ) : user ? (
               <>
                 {user.role === "caregiver" && (
@@ -1481,10 +1523,14 @@ export default function App() {
                     onPress={() => setTab("Vínculos")}
                   />
                 )}{" "}
+                <Reminders user={user} navigate={setTab} />
                 {screen}
               </>
             ) : (
-              <Auth onLogin={loggedIn} />
+              <>
+                <Auth onLogin={loggedIn} />
+                {!androidWebPackage && <Button label="Configurar servidor" tone="light" onPress={() => setSetup(true)} />}
+              </>
             )}
           </ScrollView>
         </KeyboardAvoidingView>

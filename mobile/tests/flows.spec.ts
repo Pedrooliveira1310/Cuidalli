@@ -5,6 +5,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   request,
   browser,
 }) => {
+  page.on("pageerror", e=>console.log("PAGE ERROR: "+e.message));
   const suffix = String(Date.now()).slice(-8),
     elderPhone = "119" + suffix,
     caregiverPhone = "118" + suffix;
@@ -141,7 +142,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     .click();
   await expect(
     page.getByText(
-      "Dor registrada e disponível aos cuidadores vinculados. Nenhuma notificação remota foi enviada.",
+      "Dor registrada. Seus cuidadores podem acompanhar o registro e o alerta.",
     ),
   ).toBeVisible();
   await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
@@ -233,11 +234,30 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     page.getByText("Contato SOS E2E (Irmã)", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("5511988887777", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Você precisa iniciar a/)).toBeVisible();
+  await expect(page.getByText(/iniciar a ligação/)).toBeVisible();
   await page.screenshot({
     path: "test-results/sos-mobile.png",
     fullPage: true,
   });
+  page.once("dialog", d => d.accept());
+  const sosSaved=page.waitForResponse(r=>r.url().endsWith(`/elders/${elder}/sos`)&&r.request().method()==='POST');
+  await page.getByRole('button',{name:'SOS: pedir ajuda a Contato SOS E2E'}).click();
+  expect((await sosSaved).ok()).toBeTruthy();
+  await caregiver.getByRole('tab',{name:'Início',exact:true}).click();
+  const sosCard=caregiver.getByText('Pedido de ajuda',{exact:true}).locator('..');
+  await sosCard.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
+  await expect(sosCard.getByText(/Em acompanhamento/)).toBeVisible();
+  await page.getByRole('button',{name:'Atualizar lista',exact:true}).click();
+  await expect(page.getByText('Acompanhado por Cuidador fictício E2E',{exact:true})).toBeVisible({timeout:20000});
+  await page.reload();
+  await expect(page.getByRole('tab',{name:'Início',exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:'Assistente',exact:true}).click();
+  await page.getByRole('button',{name:'Minhas consultas',exact:true}).click();
+  await expect(page.getByText('Você não tem próximas consultas cadastradas.',{exact:true})).toBeVisible();
+  await expect(page.getByText(/previstos para a sprint/i)).toHaveCount(0);
+  await page.screenshot({path:'test-results/assistente.png',fullPage:true});
+  await page.reload();
+  await expect(page.getByRole('tab',{name:'Início',exact:true})).toBeVisible();
   await context.close();
 });
 test("falha da API exibe mensagem sem simular login", async ({ page }) => {
@@ -258,3 +278,5 @@ test("falha da API exibe mensagem sem simular login", async ({ page }) => {
     page.getByRole("button", { name: "Entrar", exact: true }),
   ).toBeEnabled();
 });
+
+

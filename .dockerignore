@@ -1,0 +1,8 @@
+.git
+**/node_modules
+**/android-package/build
+**/tests
+**/*.jks
+**/.env
+**/test-results
+**/playwright-report

@@ -35,6 +35,8 @@ async function setup(
 ) {
   await page.route(base + "/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if(!/^\/(health|auth|me|links|link-codes|elders|notifications)(\/|$)/.test(path)) {await route.continue();return;}
+    if(path==='/me') {await route.fulfill({status:401,json:{error:'Entre na sua conta.'}});return;}
     if (handler && (await handler(route, path))) return;
     const body =
       path === "/auth/login"

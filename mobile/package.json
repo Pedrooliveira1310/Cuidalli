@@ -1,8 +1,8 @@
 {
   "name": "cuidali-mobile",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",

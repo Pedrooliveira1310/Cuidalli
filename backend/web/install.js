@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator && !window.CuidaliNative)navigator.serviceWorker.register('/sw.js').catch(()=>{});

@@ -47,6 +47,7 @@ final class Api {
     }
     private function activity(int $elder,string $action): void {
         $this->query('INSERT INTO activities(elder_id,actor_id,action) VALUES(?,?,?)',[$elder,$this->user['id'],$action]);
+        if ((int)$this->user['id']===$elder) $this->query("UPDATE care_alerts SET status='resolved',resolved_at=UTC_TIMESTAMP() WHERE elder_id=? AND kind='inactivity' AND status<>'resolved'",[$elder]);
     }
     private function authorize(int $elder): void {
         $valid=$this->user['role']==='elder' ? (int)$this->user['id']===$elder : (bool)$this->query('SELECT 1 FROM care_links WHERE elder_id=? AND caregiver_id=?',[$elder,$this->user['id']])->fetchColumn();
@@ -72,6 +73,7 @@ final class Api {
         if (!$this->user) $this->fail(401,'Sessão expirada. Entre novamente.');
         if ($method==='GET' && $path==='/me') return ['user'=>$this->user];
         if ($method==='POST' && $path==='/auth/logout') { $this->query('DELETE FROM sessions WHERE token_hash=?',[$hash]); return ['message'=>'Você saiu da conta.']; }
+        if ($path==='/notifications' && $method==='GET') return $this->notifications();
         if ($path==='/links' && $method==='GET') {
             $elder=$this->user['role']==='elder';
             return ['items'=>$this->query('SELECT u.id,u.name,u.phone FROM care_links l JOIN users u ON u.id=l.'.($elder?'caregiver_id':'elder_id').' WHERE l.'.($elder?'elder_id':'caregiver_id').'=?',[$this->user['id']])->fetchAll()];
@@ -107,9 +109,10 @@ final class Api {
                 return ['elder_id'=>(int)$row['elder_id'],'message'=>'Vinculação concluída.'];
             });
         }
-        if (!preg_match('#^/elders/(\d+)/(dashboard|medications|doses|appointments|contacts|pains)(?:/(\d+))?(?:/(seen))?$#',$path,$m)) $this->fail(404,'Rota não encontrada.');
+        if (!preg_match('#^/elders/(\d+)/(dashboard|medications|doses|appointments|contacts|pains|sos|alerts|settings|assistant|activity)(?:/(\d+))?(?:/(seen))?$#',$path,$m)) $this->fail(404,'Rota não encontrada.');
         $elder=(int)$m[1]; $resource=$m[2]; $id=isset($m[3])?(int)$m[3]:0; $seen=($m[4]??'')==='seen';
         $this->authorize($elder);
+        if (in_array($resource,['sos','alerts','settings','assistant','activity'],true)) return $this->care($method,$elder,$resource,$id,$data);
         if ($resource==='dashboard' && $method==='GET' && !$id) return $this->dashboard($elder);
         if ($resource==='medications') return $this->medications($method,$elder,$id,$data);
         if ($resource==='doses' && $method==='POST' && $id) return $this->dose($elder,$id,$data);
@@ -242,12 +245,16 @@ final class Api {
         if (!is_string($notes)||$this->length($notes)>1000) $this->fail(422,'Observação deve ter até 1000 caracteres.');
         $this->query('INSERT INTO pains(elder_id,view,region,type,intensity,onset,notes) VALUES(?,?,?,?,?,?,?)',[$elder,$view,$region,$type,$intensity,$onset,$notes]);
         $id=(int)$this->db->lastInsertId(); $this->activity($elder,'pain_recorded'); http_response_code(201);
-        return ['id'=>$id,'message'=>'Dor registrada e disponível aos cuidadores vinculados. Nenhuma notificação remota foi enviada.'];
+        $this->query("INSERT INTO care_alerts(elder_id,kind,episode_key) VALUES(?,'pain',?)",[$elder,'pain:'.$id]);
+        return ['id'=>$id,'message'=>'Dor registrada. Seus cuidadores podem acompanhar o registro e o alerta.'];
     }
     private function dashboard(int $elder): array {
+        $this->scanInactivity($elder);
         $today=(new DateTimeImmutable('now',new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d'); $start=(new DateTimeImmutable($today,new DateTimeZone('America/Sao_Paulo')))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         $end=(new DateTimeImmutable($today,new DateTimeZone('America/Sao_Paulo')))->modify('+1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         return [
+            'alerts'=>$this->query('SELECT a.*,u.name AS accepted_name FROM care_alerts a LEFT JOIN users u ON u.id=a.accepted_by WHERE a.elder_id=? ORDER BY a.id DESC LIMIT 100',[$elder])->fetchAll(),
+            'settings'=>['inactivity_hours'=>(int)($this->query('SELECT inactivity_hours FROM care_settings WHERE elder_id=?',[$elder])->fetchColumn() ?: 24)],
             'date'=>$today,'timezone'=>'America/Sao_Paulo',
             'elder'=>$this->query('SELECT id,name,phone FROM users WHERE id=?',[$elder])->fetch(),
             'last_activity'=>$this->query('SELECT action,created_at FROM activities WHERE elder_id=? AND actor_id=? ORDER BY id DESC LIMIT 1',[$elder,$elder])->fetch() ?: null,
@@ -256,4 +263,79 @@ final class Api {
             'dose_history'=>$this->query('SELECT d.*,t.time,m.name,m.dosage FROM dose_records d JOIN medication_times t ON t.id=d.time_id JOIN medications m ON m.id=t.medication_id WHERE m.elder_id=? ORDER BY d.dose_date DESC,t.time DESC LIMIT 200',[$elder])->fetchAll()
         ];
     }
+
+    public function runMonitoring(): void {
+        foreach($this->query("SELECT id FROM users WHERE role='elder'")->fetchAll(PDO::FETCH_COLUMN) as $id) $this->scanInactivity((int)$id);
+    }
+    private function scanInactivity(int $elder): void {
+        $row=$this->query("SELECT u.created_at,COALESCE(MAX(a.created_at),u.created_at) AS last_active,COALESCE(s.inactivity_hours,24) AS hours FROM users u LEFT JOIN activities a ON a.elder_id=u.id AND a.actor_id=u.id LEFT JOIN care_settings s ON s.elder_id=u.id WHERE u.id=? GROUP BY u.id,u.created_at,s.inactivity_hours",[$elder])->fetch();
+        if (!$row) return;
+        if (time()-strtotime($row['last_active'].' UTC') >= (int)$row['hours']*3600) {
+            $this->query("INSERT IGNORE INTO care_alerts(elder_id,kind,episode_key) VALUES(?,'inactivity',?)",[$elder,'inactive:'.$elder.':'.$row['last_active']]);
+        }
+    }
+    private function notifications(): array {
+        if ($this->user['role']==='elder') {
+            $this->scanInactivity((int)$this->user['id']);
+            $dashboard=$this->dashboard((int)$this->user['id']);
+            return ['role'=>'elder','date'=>$dashboard['date'],'doses'=>$dashboard['doses'],'appointments'=>$dashboard['appointments']];
+        }
+        $elders=$this->query('SELECT elder_id FROM care_links WHERE caregiver_id=?',[$this->user['id']])->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($elders as $elder) $this->scanInactivity((int)$elder);
+        return ['role'=>'caregiver','items'=>$this->query("SELECT a.*,u.name AS elder_name FROM care_alerts a JOIN care_links l ON l.elder_id=a.elder_id JOIN users u ON u.id=a.elder_id WHERE l.caregiver_id=? AND a.status IN ('open','accepted') ORDER BY a.id DESC LIMIT 100",[$this->user['id']])->fetchAll()];
+    }
+    private function care(string $method,int $elder,string $resource,int $id,array $data): array {
+        if ($resource==='activity' && $method==='POST') { $this->role('elder'); $this->activity($elder,'check_in'); return ['message'=>'Presença registrada.']; }
+        if ($resource==='settings') {
+            if ($method==='GET') return ['inactivity_hours'=>(int)($this->query('SELECT inactivity_hours FROM care_settings WHERE elder_id=?',[$elder])->fetchColumn() ?: 24)];
+            $this->role('caregiver'); if($method!=='PATCH') $this->fail(405,'Método não permitido.');
+            $hours=$data['inactivity_hours']??null;
+            if(!is_int($hours)||$hours<1||$hours>168) $this->fail(422,'Escolha entre 1 e 168 horas.');
+            $this->query('INSERT INTO care_settings(elder_id,inactivity_hours) VALUES(?,?) ON DUPLICATE KEY UPDATE inactivity_hours=VALUES(inactivity_hours)',[$elder,$hours]);
+            return ['message'=>'Acompanhamento atualizado.'];
+        }
+        if ($resource==='sos' && $method==='POST' && !$id) {
+            $this->role('elder'); $this->rate('sos:'.$elder,30);
+            $this->transaction(function() use($elder) {
+                $this->query('SELECT id FROM users WHERE id=? FOR UPDATE',[$elder]);
+                if (!$this->query("SELECT id FROM care_alerts WHERE elder_id=? AND kind='sos' AND status<>'resolved' AND created_at>DATE_SUB(UTC_TIMESTAMP(),INTERVAL 30 SECOND)",[$elder])->fetchColumn()) $this->query("INSERT INTO care_alerts(elder_id,kind) VALUES(?,'sos')",[$elder]);
+                $this->activity($elder,'sos_requested');
+            });
+            return ['message'=>'Pedido de ajuda registrado. Ligue para seu contato para falar diretamente.','contact'=>$this->query('SELECT * FROM contacts WHERE elder_id=? AND is_primary=1',[$elder])->fetch() ?: null];
+        }
+        if ($resource==='alerts') {
+            $this->scanInactivity($elder);
+            if ($method==='GET') return ['items'=>$this->query('SELECT a.*,u.name AS accepted_name FROM care_alerts a LEFT JOIN users u ON u.id=a.accepted_by WHERE a.elder_id=? ORDER BY a.id DESC LIMIT 100',[$elder])->fetchAll()];
+            $this->role('caregiver'); if($method!=='PATCH'||!$id) $this->fail(405,'Método não permitido.');
+            $this->item('care_alerts',$id,$elder); $status=$this->enum($data,'status',['accepted','resolved']);
+            if ($status==='accepted') $this->query("UPDATE care_alerts SET status='accepted',accepted_by=?,accepted_at=UTC_TIMESTAMP() WHERE id=? AND status='open'",[$this->user['id'],$id]);
+            else $this->query("UPDATE care_alerts SET status='resolved',accepted_by=COALESCE(accepted_by,?),accepted_at=COALESCE(accepted_at,UTC_TIMESTAMP()),resolved_at=UTC_TIMESTAMP() WHERE id=? AND status<>'resolved'",[$this->user['id'],$id]);
+            return ['message'=>$status==='accepted'?'Você assumiu o acompanhamento.':'Alerta concluído.'];
+        }
+        if ($resource==='assistant') {
+            if ($method==='GET') return ['items'=>array_reverse($this->query('SELECT * FROM assistant_messages WHERE elder_id=? ORDER BY id DESC LIMIT 30',[$elder])->fetchAll())];
+            if ($method!=='POST') $this->fail(405,'Método não permitido.');
+            $this->rate('assistant:'.$this->user['id'],60); $message=$this->text($data,'message',500);
+            $q=strtolower(strtr($message,['á'=>'a','à'=>'a','â'=>'a','ã'=>'a','é'=>'e','ê'=>'e','í'=>'i','ó'=>'o','ô'=>'o','õ'=>'o','ú'=>'u','ç'=>'c','Á'=>'a','À'=>'a','Â'=>'a','Ã'=>'a','É'=>'e','Ê'=>'e','Í'=>'i','Ó'=>'o','Ô'=>'o','Õ'=>'o','Ú'=>'u','Ç'=>'c'])); $action=null; $confirmationDoses=[];
+            if (preg_match('/(sos|socorro|ajuda|emergencia)/',$q)) { $reply='Abra o SOS para pedir ajuda aos seus cuidadores e ligar para o contato de confiança.'; $action='SOS'; }
+            elseif (preg_match('/(dor|doendo)/',$q)) { $reply='Você pode registrar onde dói e a intensidade em Dores para compartilhar com seus cuidadores.'; $action='Dores'; }
+            elseif (preg_match('/(ja tomei|tomei o|tomei a|confirmar dose)/',$q)) {
+                if($this->user['role']!=='elder')$this->fail(403,'A confirmação precisa ser feita pela pessoa idosa.');
+                $d=$this->dashboard($elder);$confirmationDoses=array_values(array_filter($d['doses'],fn($x)=>$x['status']!=='taken'));
+                $reply=$confirmationDoses?'Escolha e confirme a dose que você tomou. A confirmação só será registrada quando você confirmar o medicamento e o horário.':'Todas as doses de hoje já estão confirmadas, ou não há dose cadastrada para hoje.';$action='Início';
+            } elseif (preg_match('/(remedio|medica|dose|tomei)/',$q)) {
+                $d=$this->dashboard($elder); $pending=array_filter($d['doses'],fn($x)=>$x['status']!=='taken');
+                $reply=$pending ? 'Suas doses de hoje ainda sem confirmação: '.implode('; ',array_map(fn($x)=>$x['name'].' '.$x['dosage'].' às '.$x['time'],$pending)).'. Confirme apenas as doses que você tomou.' : 'Não há doses sem confirmação para hoje.'; $action='Medicamentos';
+            } elseif (preg_match('/(consulta|agenda|medico)/',$q)) {
+                $a=$this->query('SELECT * FROM appointments WHERE elder_id=? AND cancelled=0 AND scheduled_at>=UTC_TIMESTAMP() ORDER BY scheduled_at LIMIT 3',[$elder])->fetchAll();
+                $reply=$a ? 'Próximas consultas: '.implode('; ',array_map(fn($x)=>$x['specialty'].' em '.(new DateTimeImmutable($x['scheduled_at'],new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i').' em '.$x['location'],$a)) : 'Você não tem próximas consultas cadastradas.'; $action='Consultas';
+            } elseif (preg_match('/(dia|data|hoje|hora)/',$q)) $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
+            else $reply='Posso consultar seus medicamentos, próximas consultas e a data de hoje, ou abrir Dores e SOS. O que você gostaria de consultar?';
+            $this->query('INSERT INTO assistant_messages(elder_id,content,reply) VALUES(?,?,?)',[$elder,$message,$reply]);
+            if($this->user['role']==='elder') $this->activity($elder,'assistant_used');
+            return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d')];
+        }
+        $this->fail(405,'Método não permitido.');
+    }
+
 }

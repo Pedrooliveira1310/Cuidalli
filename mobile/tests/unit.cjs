@@ -80,9 +80,36 @@ function client(fetch, storage = {}) {
         ? { Platform: { OS: storage.native ? "android" : "web" } }
         : name === "expo-secure-store"
           ? storage
+          : name === "./server"
+            ? moduleFor("src/server.ts", { URL })
           : require(name),
   });
 }
+test("configuração do servidor exige HTTPS público e aceita somente HTTP privado", () => {
+  const { normalizeServer } = moduleFor("src/server.ts", { URL });
+  assert.equal(normalizeServer(" https://api.example.org/ "), "https://api.example.org");
+  assert.equal(normalizeServer("http://192.168.1.10:8000/"), "http://192.168.1.10:8000");
+  for (const address of ["http://example.org", "ftp://192.168.1.10", "https://user:pass@example.org", "https://example.org?token=abc", "https://example.org/#abc", "invalid"])
+    assert.throws(() => normalizeServer(address));
+});
+test("mudar o servidor remove a sessão antes de usar o novo endereço", async () => {
+  const stored = new Map([["cuidali.session", "segredo"]]);
+  const storage = {
+    native: true,
+    getItemAsync: async key => stored.get(key) || null,
+    setItemAsync: async (key, value) => { stored.set(key, value); },
+    deleteItemAsync: async key => { stored.delete(key); },
+  };
+  const calls = [];
+  const api = client(async (url, options) => { calls.push({ url, options }); return response(200); }, storage);
+  await api.restoreToken();
+  await api.saveServer("https://novo.example.org");
+  await api.api("/me");
+  assert.equal(stored.has("cuidali.session"), false);
+  assert.equal(stored.get("cuidali.server"), "https://novo.example.org");
+  assert.equal(calls[0].options.headers.Authorization, undefined);
+  assert.equal(calls[0].url, "https://novo.example.org/me");
+});
 test("401 antigo não encerra login novo; login/cadastro não enviam token", async () => {
   let finish;
   const calls = [];
