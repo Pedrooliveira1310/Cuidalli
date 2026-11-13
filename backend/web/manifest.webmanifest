@@ -1,1 +1,31 @@
-{"id": "/", "name": "Cuidali", "short_name": "Cuidali", "start_url": "/", "scope": "/", "display": "standalone", "background_color": "#F7FAFC", "theme_color": "#1A365D", "lang": "pt-BR", "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]}
+{
+  "id": "/",
+  "name": "Cuidali",
+  "short_name": "Cuidali",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F3F6FA",
+  "theme_color": "#39639A",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icon-brand-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-brand-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-brand-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

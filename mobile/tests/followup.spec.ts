@@ -22,7 +22,7 @@ test('bem-estar, dores e assistente com interpretação de horários',async({pag
  const clock=page.waitForResponse(r=>r.url().endsWith('/assistant')&&r.request().method()==='POST');await page.getByRole('button',{name:'Enviar',exact:true}).click();expect((await(await clock).json()).reply).toContain('Agora são');
  await page.getByLabel('Mensagem para o assistente',{exact:true}).fill('Qual o horário da minha consulta?');
  const agenda=page.waitForResponse(r=>r.url().endsWith('/assistant')&&r.request().method()==='POST');await page.getByRole('button',{name:'Enviar',exact:true}).click();expect((await(await agenda).json()).action).toBe('Consultas');
- await expect(page.getByText('Cuidali',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('Cuidali',{exact:true})).toHaveCount(1);
 });
 test('alteração de contato exige senha e persiste depois de entrar novamente',async({page,request})=>{
  const suffix=String(Date.now()).slice(-8),phone='113'+suffix,newPhone='112'+suffix,password='TesteCuidali2026',email='profile'+suffix+'@example.com',newEmail='updated'+suffix+'@example.com';

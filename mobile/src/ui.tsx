@@ -36,21 +36,21 @@ export const colors = {
   yellow: "#F2D6A2",
   red: "#9E3131",
   green: "#267244",
-  bg: "#F6F7F2",
+  bg: "#F3F6FA",
 };
 export const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bg },
   content: {
-    padding: 24,
-    paddingTop: 32,
+    padding: 20,
+    paddingTop: 20,
     paddingBottom: 40,
     gap: 16,
     width: "100%",
-    maxWidth: 680,
+    maxWidth: 920,
     alignSelf: "center",
   },
   title: { fontSize: 30, lineHeight: 38, fontWeight: "700", color: colors.dark },
-  subtitle: { fontSize: 22, fontWeight: "700", color: colors.dark },
+  subtitle: { fontSize: 22, lineHeight: 30, fontWeight: "700", color: colors.dark },
   text: { fontSize: 18, color: "#303842", lineHeight: 26 },
   muted: { fontSize: 16, color: "#555D67", lineHeight: 23 },
   card: {
@@ -58,8 +58,9 @@ export const styles = StyleSheet.create({
     borderRadius: 25,
     backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#D3E2EF",
-    gap: 12,
+    borderColor: "#DCE6F1",
+    gap: 14,
+    boxShadow: "0 4px 18px rgba(26,54,93,0.045)",
   },
   button: {
     minHeight: 60,
@@ -78,9 +79,9 @@ export const styles = StyleSheet.create({
   input: {
     minHeight: 56,
     borderWidth: 1,
-    borderColor: "#7B8490",
-    borderRadius: 12,
-    padding: 14,
+    borderColor: "#9FB0C2",
+    borderRadius: 16,
+    padding: 16,
     fontSize: 18,
     backgroundColor: "#FFF",
     color: "#1A2635",
@@ -536,8 +537,9 @@ export function Card({
       style={[
         styles.card,
         tone && {
-          backgroundColor: tone === "blue" ? colors.light : colors.yellow,
-          borderWidth: 0,
+          backgroundColor: tone === "blue" ? "#DFECF9" : "#F9E7C6",
+          borderWidth: 1,
+          borderColor: tone === "blue" ? "#C9DBEE" : "#EBD4A8",
         },
       ]}
     >

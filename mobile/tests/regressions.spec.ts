@@ -199,7 +199,7 @@ test("atualização offline preserva dados e bloqueia doses; revogação limpa t
   ).toBeVisible();
   mode = "offline";
   await page
-    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
+    .getByRole("button", { name: "Atualizar dados", exact: true })
     .click();
   await expect(
     page.getByText(/Não foi possível atualizar os dados/),
@@ -219,7 +219,7 @@ test("atualização offline preserva dados e bloqueia doses; revogação limpa t
   ).toBeEnabled();
   mode = "denied";
   await page
-    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
+    .getByRole("button", { name: "Atualizar dados", exact: true })
     .click();
   await expect(
     page.getByText("Remédio protegido", { exact: false }),
@@ -291,7 +291,7 @@ test("sessão expirada volta à autenticação com mensagem", async ({ page }) =
   ).toBeVisible();
   expired = true;
   await page
-    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
+    .getByRole("button", { name: "Atualizar dados", exact: true })
     .click();
   await expect(
     page.getByText("Sua sessão expirou. Entre novamente."),
@@ -411,7 +411,7 @@ test("401 atrasado após saída e novo login não encerra sessão nova", async (
     page.getByText("Remédio protegido", { exact: false }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
+    .getByRole("button", { name: "Atualizar dados", exact: true })
     .click();
   await expect.poll(() => !!release).toBeTruthy();
   await page.getByRole("tab", { name: "Idoso", exact: true }).click();
@@ -431,7 +431,7 @@ test("401 atrasado após saída e novo login não encerra sessão nova", async (
   release();
   await response;
   await page
-    .getByRole("button", { name: "↻ Ver registros mais recentes", exact: true })
+    .getByRole("button", { name: "Atualizar dados", exact: true })
     .click();
   await expect(
     page.getByRole("tab", { name: "Idoso", exact: true }),

@@ -29,7 +29,7 @@
 
 O usuário solicitou preparar a configuração de e-mail. O código e as telas estão prontos; o envio real depende de conectar uma conta de e-mail transacional conforme Configurar-email-Cuidali.md. Não foi confirmado recebimento real de e-mail nesta atualização.
 
-A ativação da biometria foi confirmada pelo usuário. O teste de entrada após reabrir o app foi adiado porque o proprietário do celular não estava presente; o APK 1.1.0 foi instalado com sucesso no celular, sem erros observados na inicialização. O envio FCM da versão anterior foi confirmado pelo usuário.
+A ativação da biometria e a entrada na mesma conta após reabrir o aplicativo foram confirmadas pelo usuário, usando a digital do proprietário e sem digitar a senha. Teste físico de biometria aprovado; o APK 1.1.0 foi instalado com sucesso no celular, sem erros observados na inicialização. O envio FCM da versão anterior foi confirmado pelo usuário.
 
 ## Rodada complementar de testes
 
@@ -39,3 +39,11 @@ A ativação da biometria foi confirmada pelo usuário. O teste de entrada após
 - Código de recuperação expirado recusado; após cinco tentativas incorretas, o código permanece bloqueado mesmo com o valor correto. As tentativas não alteram a senha vigente.
 - Envio real de e-mail não testado: depende do provedor, conforme configuração preparada.
 - Verificação adicional publicada aprovada: botão Estou bem hoje, atualização efetiva de dores, novo texto do mapa e respostas do assistente.
+
+## Identidade e interface — versão 1.2.0
+
+- Logo original aplicada ao ícone Android, com recursos adaptativos e tamanhos para aparelhos anteriores.
+- Favicon PNG, ícone de toque Apple e ícones PWA de 192 e 512 pixels, incluindo variante maskable. O HTML referencia os novos arquivos com versão de cache.
+- Página inicial com cabeçalho de marca, resumo do dia, progresso real das doses e cartões com ícone, horário e estado.
+- Lembretes em uma coluna no celular e duas em telas maiores; menu de cuidados organizado por rotina e conta; navegação com ícones consistentes e destaque da aba selecionada.
+- Prévia conferida em 320, 390 e 1280 pixels; os ícones web foram carregados e tiveram dimensões verificadas.

@@ -66,3 +66,7 @@ Não aponte os testes para um banco com dados de usuários. A instalação anter
 ## Atualização de interface e conta
 
 O protótipo visual foi aplicado à interface. Pessoas idosas podem cadastrar e editar seus medicamentos e consultas. Meus dados permite editar o perfil e ativar biometria no Android. A recuperação usa e-mail e código de uso único; configure o emissor conforme [CONFIGURAR-EMAIL.md](docs/CONFIGURAR-EMAIL.md). O envio real depende de credenciais do provedor no servidor. Consulte VALIDACAO.md para resultados e limites de verificação.
+
+## Marca e atualização do site
+
+A logo original está em mobile/assets/prototype/logo.png. Os ícones derivados são gerados pelo script scripts/create-brand-icons.ps1, preservando o símbolo original. Após exportar o Expo para web-export, execute node scripts/publish-web.mjs web-export para atualizar o site preservando favicon, manifesto e notificações.
