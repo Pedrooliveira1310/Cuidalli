@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 $requestPath=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
-$apiPath=preg_match('#^/(health|auth|me|links|link-codes|elders|notifications)(/|$)#',$requestPath);
+$apiPath=preg_match('#^/(health|auth|me|links|link-codes|elders|notifications|push-tokens)(/|$)#',$requestPath);
 if (!$apiPath && $_SERVER['REQUEST_METHOD']==='GET') {
     $webRoot=realpath(dirname(__DIR__).'/web');
     $relative=$requestPath==='/'?'index.html':ltrim(rawurldecode($requestPath),'/');

@@ -73,6 +73,7 @@ final class Api {
         if (!$this->user) $this->fail(401,'Sessão expirada. Entre novamente.');
         if ($method==='GET' && $path==='/me') return ['user'=>$this->user];
         if ($method==='POST' && $path==='/auth/logout') { $this->query('DELETE FROM sessions WHERE token_hash=?',[$hash]); return ['message'=>'Você saiu da conta.']; }
+        if ($path==='/push-tokens') return $this->pushDevices($method,$data,$hash);
         if ($path==='/notifications' && $method==='GET') return $this->notifications();
         if ($path==='/links' && $method==='GET') {
             $elder=$this->user['role']==='elder';
@@ -266,6 +267,18 @@ final class Api {
 
     public function runMonitoring(): void {
         foreach($this->query("SELECT id FROM users WHERE role='elder'")->fetchAll(PDO::FETCH_COLUMN) as $id) $this->scanInactivity((int)$id);
+        $push=new PushService($this->db);$push->queue();$push->deliver();
+    }
+    private function pushDevices(string $method,array $data,string $sessionHash):array {
+        $token=$this->text($data,'token',4096);
+        if(!preg_match('/^[A-Za-z0-9:_.~\-]{20,4096}$/',$token))$this->fail(422,'Registro de notificações inválido.');
+        $hash=hash('sha256',$token);
+        if($method==='DELETE'){$this->query('DELETE FROM push_devices WHERE token_hash=? AND user_id=?',[$hash,$this->user['id']]);return ['message'=>'Avisos desativados neste dispositivo.'];}
+        if($method!=='POST')$this->fail(405,'Método não permitido.');
+        $platform=$this->enum($data,'platform',['android','web']);
+        $this->query('INSERT INTO push_devices(user_id,session_hash,token_hash,token,platform) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id),session_hash=VALUES(session_hash),token=VALUES(token),platform=VALUES(platform),updated_at=UTC_TIMESTAMP()',[$this->user['id'],$sessionHash,$hash,$token,$platform]);
+        (new PushService($this->db))->queue();
+        return ['message'=>'Avisos ativados neste dispositivo.'];
     }
     private function scanInactivity(int $elder): void {
         $row=$this->query("SELECT u.created_at,COALESCE(MAX(a.created_at),u.created_at) AS last_active,COALESCE(s.inactivity_hours,24) AS hours FROM users u LEFT JOIN activities a ON a.elder_id=u.id AND a.actor_id=u.id LEFT JOIN care_settings s ON s.elder_id=u.id WHERE u.id=? GROUP BY u.id,u.created_at,s.inactivity_hours",[$elder])->fetch();
