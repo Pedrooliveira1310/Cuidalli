@@ -19,7 +19,7 @@
 - API existente: 129 verificações aprovadas.
 - Cuidados e assistente: 43 verificações aprovadas.
 - Push e autorização: 18 verificações aprovadas.
-- Conta, medicamentos do idoso, intenção de horário e recuperação: 16 verificações aprovadas.
+- Conta, medicamentos do idoso, intenção de horário e recuperação: 24 verificações aprovadas.
 - Navegador: 14 regressões existentes e 2 novos fluxos validados (uma expectativa de rótulo e uma seta superior foram corrigidas durante a revisão).
 - TypeScript e 7 testes unitários aprovados.
 - Compilação Android final de release com biometria, integridade dos arquivos e assinatura aprovadas. APK 1.1.0 (versão interna 6).
@@ -29,4 +29,13 @@
 
 O usuário solicitou preparar a configuração de e-mail. O código e as telas estão prontos; o envio real depende de conectar uma conta de e-mail transacional conforme Configurar-email-Cuidali.md. Não foi confirmado recebimento real de e-mail nesta atualização.
 
-A nova biometria ainda precisa de confirmação física no aparelho; a instalação da atualização aguarda reconexão USB. O envio FCM da versão anterior foi confirmado pelo usuário.
+A ativação da biometria foi confirmada pelo usuário. O teste de entrada após reabrir o app foi adiado porque o proprietário do celular não estava presente; o APK 1.1.0 foi instalado com sucesso no celular, sem erros observados na inicialização. O envio FCM da versão anterior foi confirmado pelo usuário.
+
+## Rodada complementar de testes
+
+- Seis fluxos reais do site publicado aprovados: cuidados completos e vínculo, falha de conexão, interpretação do assistente, alteração protegida de telefone/e-mail, recuperação e privacidade na interface, cadastro e edição pelo idoso.
+- Alterações de telefone/e-mail recusadas com senha incorreta e persistentes após nova entrada com a senha correta. O telefone antigo deixou de permitir entrada após a alteração.
+- Perguntas sobre novela e horário atual distinguidas; perguntas sobre consultas encaminhadas à agenda.
+- Código de recuperação expirado recusado; após cinco tentativas incorretas, o código permanece bloqueado mesmo com o valor correto. As tentativas não alteram a senha vigente.
+- Envio real de e-mail não testado: depende do provedor, conforme configuração preparada.
+- Verificação adicional publicada aprovada: botão Estou bem hoje, atualização efetiva de dores, novo texto do mapa e respostas do assistente.

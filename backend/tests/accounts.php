@@ -31,4 +31,15 @@ callApi('GET','/me',[],$et,401);
 callApi('POST','/auth/login',['phone'=>$phone,'password'=>$password],'',401);
 ok(isset(callApi('POST','/auth/login',['phone'=>$phone,'password'=>'NovaSenha123'])['token']),'Nova senha permite entrada');
 try{$recovery->handle('/auth/reset-password',['email'=>$email,'recovery_code'=>$sent[0][1],'password'=>'OutraSenha123']);throw new RuntimeException('Código reutilizado');}catch(ApiError $e){ok($e->status===422,'Código consumido não pode ser reutilizado');}
+$recovery->handle('/auth/forgot-password',['email'=>$email]);
+$latest=$sent[count($sent)-1][1];
+$db->prepare('UPDATE password_resets SET expires_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 1 SECOND) WHERE user_id=?')->execute([$elder]);
+try{$recovery->handle('/auth/reset-password',['email'=>$email,'recovery_code'=>$latest,'password'=>'OutraSenha123']);throw new RuntimeException('Código expirado aceito');}catch(ApiError $e){ok($e->status===422,'Código expirado não altera senha');}
+$recovery->handle('/auth/forgot-password',['email'=>$email]);
+$latest=$sent[count($sent)-1][1];
+for($attempt=0;$attempt<5;$attempt++){
+ try{$recovery->handle('/auth/reset-password',['email'=>$email,'recovery_code'=>'000000','password'=>'OutraSenha123']);throw new RuntimeException('Código incorreto aceito');}catch(ApiError $e){ok($e->status===422,'Tentativa incorreta recusada '.($attempt+1));}
+}
+try{$recovery->handle('/auth/reset-password',['email'=>$email,'recovery_code'=>$latest,'password'=>'OutraSenha123']);throw new RuntimeException('Código bloqueado aceito');}catch(ApiError $e){ok($e->status===422,'Cinco erros bloqueiam o código mesmo com valor correto');}
+ok(isset(callApi('POST','/auth/login',['phone'=>$phone,'password'=>'NovaSenha123'])['token']),'Tentativas de recuperação não alteram a senha vigente');
 echo "$count verificações aprovadas.\n";
