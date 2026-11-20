@@ -61,9 +61,31 @@ async function setup(
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
 }
 async function open(page: Page, name: string) {
-  await page.getByRole("tab", { name: "Idoso", exact: true }).click();
+  await page.getByRole("tab", { name: /^(Idoso|Cuidados)$/ }).click();
   await page.getByRole("button", { name, exact: true }).click();
 }
+test("confirmar dose pelo lembrete atualiza o progresso do painel", async ({ page }) => {
+  let taken = false;
+  const due = {...dashboard.doses[0],time:"00:00"};
+  await setup(page, elder, async (route, path) => {
+    if (path === "/notifications") {
+      await route.fulfill({json:{date:dashboard.date,doses:taken?[]:[due]}});
+    } else if (path === "/elders/1/doses/1") {
+      taken = route.request().postDataJSON().status === "taken";
+      await route.fulfill({json:{message:"Dose registrada."}});
+    } else if (path === "/elders/1/dashboard") {
+      await route.fulfill({json:{...dashboard,doses:[{...due,status:taken?"taken":due.status}]}});
+    } else {
+      return false;
+    }
+    return true;
+  });
+  const progress = page.getByRole("progressbar", {name:"Doses confirmadas"});
+  await expect(progress).toHaveAttribute("aria-valuenow","0");
+  await page.getByRole("button", {name:"Já tomei",exact:true}).click();
+  await expect(progress).toHaveAttribute("aria-valuenow","1");
+  await expect(page.getByText("Lembrete de medicamento",{exact:true})).toHaveCount(0);
+});
 test("inputs web, telefone digitado/colado, autocomplete e senha visível", async ({
   page,
   context,
@@ -141,7 +163,7 @@ test("horários individuais, duplicados, datas e bloqueio durante salvamento", a
     .click();
   await open(page, "Medicamentos");
   await expect(
-    page.getByRole("tab", { name: "Idoso", exact: true }),
+    page.getByRole("tab", { name: "Cuidados", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await page
     .getByRole("button", { name: "Adicionar medicamento", exact: true })

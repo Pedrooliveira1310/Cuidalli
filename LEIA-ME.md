@@ -22,6 +22,18 @@ Requer PHP 8.2+, MySQL 8 ou MariaDB, Node compatível com `mobile/package.json`.
 
 A interface web compilada está em `backend/web`. Para recompilar, dentro de `mobile`, execute `npm ci`, `npm run typecheck` e `node node_modules/expo/bin/cli export --platform web --output-dir ../backend/web`. Preserve os arquivos de instalação PWA ao reconstruir o HTML.
 
+## Demonstração para apresentação
+
+Crie um banco local vazio com um nome terminado em `_demo_test`, por exemplo `cuidali_apresentacao_demo_test`. Na pasta do código, configure as variáveis do banco para esse ambiente e defina `CUIDALI_DEMO_PASSWORD` com uma senha exclusiva de demonstração. Use a mesma senha ao reabrir a demonstração com esse banco.
+
+```powershell
+php backend/migrate.php
+php backend/seed-demo.php
+php -S 127.0.0.1:8010 backend/public/index.php
+```
+
+Abra `http://127.0.0.1:8010/`. Na seção **Demonstração**, escolha o perfil pelo e-mail para entrar com dados fictícios. Para preparar uma consulta e o progresso das doses para o dia da apresentação, execute o script de preparação nesse mesmo banco novamente. O acesso por demonstração exige o servidor local do PHP e um banco local dedicado.
+
 ## Implantação
 
 1. Configure um domínio e um servidor com Docker Compose. Aponte o DNS para o servidor e libere as portas 80 e 443.

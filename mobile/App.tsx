@@ -1,4 +1,4 @@
-import {AppIcon,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
+import {AppIcon,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
 import {AccountProfile,PasswordRecovery,LegalInformation} from "./src/AccountScreens";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
@@ -106,7 +106,7 @@ const regions: Record<string, string> = {
   left_foot: "Pé esquerdo",
   right_foot: "Pé direito",
 };
-function useData(path: string) {
+function useData(path: string, refreshKey = 0) {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
@@ -164,7 +164,7 @@ function useData(path: string) {
     return () => {
       active = false;
     };
-  }, [path, revision]);
+  }, [path, revision, refreshKey]);
   useEffect(() => {
     let day = new Intl.DateTimeFormat("sv-SE", {
       timeZone: "America/Sao_Paulo",
@@ -220,19 +220,49 @@ function Loading({ state, refresh=true }: { state: ReturnType<typeof useData>;re
     </>
   );
 }
-function Auth({ onLogin,onScreenChange }: { onLogin: (user: User) => void;onScreenChange:()=>void }) {
+type DemoProfile = {email: string; role: User["role"]};
+
+function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => void;onScreenChange:()=>void;showBrand:boolean }) {
   useEffect(()=>{if(Platform.OS!=="web")return;const handler=async(e:Event)=>{const value=(e as CustomEvent).detail;if(!value.token){setMessage(value.message);return;}try{await saveToken(value.token);const r=await api("/me");onLogin(r.user);}catch(error){setMessage((error as Error).message);}};window.addEventListener("cuidali-biometric",handler);return()=>window.removeEventListener("cuidali-biometric",handler);},[]);
   const [recovery,setRecovery]=useState(false),[legal,setLegal]=useState<"terms"|"privacy"|null>(null);
   const [role, setRole] = useState<"elder" | "caregiver">("elder"),
     [stage, setStage] = useState<"profile" | "register" | "login">("profile"),
     [message, setMessage] = useState("");
+  const [demoProfiles, setDemoProfiles] = useState<DemoProfile[]>([]);
+  const [openingDemo, setOpeningDemo] = useState("");
+  const [demoError, setDemoError] = useState("");
+  useEffect(() => {
+    if (Platform.OS !== "web" || window.CuidaliNative ||
+        !["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) return;
+    let active = true;
+    api<{items: DemoProfile[]}>("/auth/demo").then(result => {
+      if (active && Array.isArray(result.items)) setDemoProfiles(result.items);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   useEffect(()=>{onScreenChange();},[stage,recovery,legal]);
-  const logoScale=stage==="profile"?1:.46;
+  async function signIn(credentials: {phone: string; password: string} | {demo_email: string}) {
+    const result = await api<{token: string; user: User}>("/auth/login", "POST", credentials);
+    await saveToken(result.token);
+    onLogin(result.user);
+  }
+  async function openDemo(email: string) {
+    if (openingDemo) return;
+    setOpeningDemo(email);
+    setDemoError("");
+    try {
+      await signIn({demo_email: email});
+    } catch (error) {
+      setDemoError((error as Error).message);
+    } finally {
+      setOpeningDemo("");
+    }
+  }
   if(recovery)return <PasswordRecovery onBack={()=>setRecovery(false)} />;
   if(legal)return <LegalInformation kind={legal} onBack={()=>setLegal(null)} />;
   return (
     <>
-      <BrandHeader large />
+      {showBrand && <BrandHeader large />}
       {!!message && (
         <Text accessibilityRole="alert" style={s.success}>
           {message}
@@ -245,14 +275,47 @@ function Auth({ onLogin,onScreenChange }: { onLogin: (user: User) => void;onScre
           <Text style={s.text}>
             Escolha uma opção para configurarmos o app do jeito certo.
           </Text>
+          {!!demoProfiles.length && (
+            <Card tone="blue">
+              <Text accessibilityRole="header" style={s.subtitle}>Demonstração</Text>
+              <Text style={s.muted}>Explore o Cuidali com dados fictícios.</Text>
+              <View style={s.row}>
+                {demoProfiles.map(profile => {
+                  const label = profile.role === "elder" ? "Pessoa idosa" : "Cuidador";
+                  return (
+                    <Pressable key={profile.email} accessibilityRole="button"
+                      accessibilityLabel={`Entrar na demonstração · ${label} · ${profile.email}`}
+                      disabled={!!openingDemo}
+                      accessibilityState={{disabled:!!openingDemo,busy:openingDemo===profile.email}}
+                      onPress={()=>openDemo(profile.email)}
+                      style={({pressed,hovered}:{pressed:boolean;hovered?:boolean})=>({
+                        flexGrow:1,flexBasis:205,minHeight:65,borderRadius:12,borderWidth:1,
+                        borderColor:"#B7CEE9",backgroundColor:pressed||hovered?colors.light:"#FFF",
+                        padding:10,gap:3,justifyContent:"center",
+                      })}>
+                      <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                        <AppIcon name={profile.role==="elder"?"person":"shield"} size={19}/>
+                        <Text style={[s.label,{flex:1}]}>{openingDemo===profile.email?"Abrindo…":label}</Text>
+                        <AppIcon name="chevron" size={15}/>
+                      </View>
+                      <Text style={[s.muted,{fontSize:14,lineHeight:20}]}>{profile.email}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {!!demoError && <Text accessibilityRole="alert" style={s.error}>{demoError}</Text>}
+            </Card>
+          )}
           {(["elder", "caregiver"] as const).map((r) => (
             <Pressable
               key={r}
               accessibilityRole="radio"
+              disabled={!!openingDemo}
               accessibilityState={{ checked: role === r }}
               onPress={() => setRole(r)}
-              style={[
+              style={({pressed}) => [
                 s.card,
+                pressed && { backgroundColor: colors.light },
                 role === r && {
                   backgroundColor: colors.light,
                   borderColor: colors.blue,
@@ -267,10 +330,11 @@ function Auth({ onLogin,onScreenChange }: { onLogin: (user: User) => void;onScre
               </View>
             </Pressable>
           ))}
-          <Button label="Continuar" onPress={() => setStage("register")} />
+          <Button label="Continuar" disabled={!!openingDemo} onPress={() => setStage("register")} />
           <Button
             label="Já tenho conta · Entrar"
             tone="light"
+            disabled={!!openingDemo}
             onPress={() => setStage("login")}
           />
         </>
@@ -341,22 +405,13 @@ function Auth({ onLogin,onScreenChange }: { onLogin: (user: User) => void;onScre
         <>
           <Text style={s.title}>Que bom te ver de novo</Text>
           <Text style={s.text}>Entre para acompanhar seus cuidados.</Text>
-          {Platform.OS === "web" && (
-            <Text style={s.muted}>
-              Acesse seus cuidados com telefone e senha.
-            </Text>
-          )}
           <Form
             fields={[
               { key: "phone", label: "Telefone com DDD", phone: true },
               { key: "password", label: "Senha", secure: true },
             ]}
             submit="Entrar"
-            onSave={async (v) => {
-              const result = await api("/auth/login", "POST", v);
-              await saveToken(result.token);
-              onLogin(result.user);
-            }}
+            onSave={v=>signIn({phone:v.phone,password:v.password})}
           />
           {Platform.OS==="web" && !!window.CuidaliNative?.biometric && <Button label="Entrar com biometria" tone="light" onPress={()=>window.CuidaliNative?.biometric?.(false)} />}
           <Button label="Esqueci minha senha" tone="light" onPress={()=>setRecovery(true)} />
@@ -370,7 +425,7 @@ function Auth({ onLogin,onScreenChange }: { onLogin: (user: User) => void;onScre
           />
         </>
       )}
-      <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:16,paddingVertical:12}}>{(["terms","privacy"] as const).map(kind=><Pressable key={kind} accessibilityRole="button" onPress={()=>setLegal(kind)} style={{minHeight:48,justifyContent:"center"}}><Text style={{fontSize:16,color:colors.blue,textDecorationLine:"underline"}}>{kind==="terms"?"Termos de Uso":"Política de Privacidade"}</Text></Pressable>)}</View>
+      <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:16,paddingVertical:12}}>{(["terms","privacy"] as const).map(kind=><Pressable key={kind} accessibilityRole="button" disabled={!!openingDemo} onPress={()=>setLegal(kind)} style={{minHeight:48,justifyContent:"center"}}><Text style={{fontSize:16,color:colors.blue,textDecorationLine:"underline"}}>{kind==="terms"?"Termos de Uso":"Política de Privacidade"}</Text></Pressable>)}</View>
     </>
   );
 }
@@ -378,15 +433,31 @@ function Home({
   elder,
   user,
   navigate,
+  doseRevision,
 }: {
   elder: number;
   user: User;
   navigate: (tab: string) => void;
+  doseRevision: number;
 }) {
-  const wide = useWindowDimensions().width >= 800;
-  const state = useData(`/elders/${elder}/dashboard`),
+  const wide = useWindowDimensions().width >= 1050;
+  const state = useData(`/elders/${elder}/dashboard`, doseRevision),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
+  const caregiver = user.role === "caregiver";
+  async function checkIn() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api(`/elders/${elder}/activity`,"POST");
+      setMessage("Seu cuidador já pode ver que você está bem hoje.");
+      state.reload();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function dose(id: number, status: string) {
     if (busy || state.loading || state.error || !state.data) return;
     setBusy(true);
@@ -406,7 +477,13 @@ function Home({
   }
   return (
     <>
-      <DayHero name={user.name.split(" ")[0]} date={new Date().toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo",weekday:"long",day:"numeric",month:"long"})} summary={state.data?{taken:state.data.doses.filter((d:any)=>d.status==='taken').length,total:state.data.doses.length}:undefined} />
+      <DayHero
+        name={user.name.split(" ")[0]}
+        date={new Date().toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo",weekday:"long",day:"numeric",month:"long"})}
+        elderName={caregiver ? state.data?.elder.name : undefined}
+        summary={state.data ? {taken:state.data.doses.filter((d:any)=>d.status==='taken').length,total:state.data.doses.length} : undefined}
+        wide={wide}
+      />
       <Loading state={state} refresh={false} />
       {!!message && (
         <Text accessibilityRole="alert" style={s.text}>
@@ -415,27 +492,34 @@ function Home({
       )}
       {state.data && (
         <>
-          {user.role === "caregiver" && <Card>
-            <Text style={s.subtitle}>{state.data.elder.name}</Text>
-            {user.role === "caregiver" && (
-              <Text style={s.text}>
-                {state.data.last_activity
-                  ? `Última atividade do idoso: ${dateTime(state.data.last_activity.created_at)}`
-                  : "Ainda não há atividade registrada pelo idoso."}
-              </Text>
-            )}
-          </Card>}
+          {caregiver && (
+            <Text style={s.muted}>
+              {state.data.last_activity
+                ? `Última atividade do idoso: ${dateTime(state.data.last_activity.created_at)}`
+                : "Ainda não há atividade registrada pelo idoso."}
+            </Text>
+          )}
           {user.role === "caregiver" && <Alerts elder={elder} caregiver />}
           {user.role === "caregiver" && <Card><Text style={s.subtitle}>Acompanhamento de atividade</Text><Form fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]} submit="Salvar acompanhamento" onSave={async v=>{await api(`/elders/${elder}/settings`,"PATCH",{inactivity_hours:Number(v.inactivity_hours)});setMessage("Acompanhamento atualizado.");state.reload();}} /></Card>}
-          {user.role === "elder" && <Button label="Estou bem hoje" onPress={async()=>{await api(`/elders/${elder}/activity`,"POST");setMessage("Seu cuidador já pode ver que você está bem hoje.");state.reload();}} />}
+          {!caregiver && (
+            <MenuRow label="Estou bem hoje" icon="heart"
+              subtitle="Compartilhe como você está com seus cuidadores." onPress={checkIn} busy={busy}/>
+          )}
           <Text style={s.subtitle}>Remédios de hoje</Text>
           {!state.data.doses.length && (
-            <Text style={s.text}>Nenhuma dose prevista para hoje.</Text>
+            <Card><Text style={s.text}>Nenhuma dose prevista para hoje.</Text></Card>
           )}
-          <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>{state.data.doses.map((d: any) => (
-            <View key={d.time_id} style={{flexGrow:1,flexBasis:wide?"46%":"100%",minWidth:0}}><Card tone="blue">
-              <View style={{flexDirection:'row',alignItems:'center',gap:14}}><View style={{width:60,height:60,borderRadius:19,backgroundColor:'#FFFFFF99',alignItems:'center',justifyContent:'center'}}><Image source={require("./assets/prototype/pills.png")} style={{width:48,height:42}} resizeMode="contain" /></View><View style={{flex:1,gap:5}}><Text style={s.subtitle}>{d.time} · {d.name}</Text><Text style={s.text}>{d.dosage}</Text></View></View>
-              <View style={{alignSelf:'flex-start',paddingHorizontal:12,paddingVertical:7,borderRadius:12,backgroundColor:d.status==='taken'?'#DDEFE4':'#FFFFFFB8'}}><Text style={{fontSize:16,lineHeight:23,fontWeight:'600',color:d.status==='taken'?'#24613E':'#405D7E'}}>{statusLabel[d.status]}</Text></View>
+          {!!state.data.doses.length && <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>{state.data.doses.map((d: any) => (
+            <View key={d.time_id} style={{flexGrow:1,flexBasis:wide?"46%":"100%",minWidth:0}}><Card>
+              <View style={{flexDirection:'row',alignItems:'center',gap:14}}>
+                <View style={{width:52,height:52,borderRadius:15,backgroundColor:colors.light,alignItems:'center',justifyContent:'center'}}>
+                  <Image source={require("./assets/prototype/pills.png")} style={{width:35,height:35}} resizeMode="contain" />
+                </View>
+                <View style={{flex:1,gap:3}}><Text style={s.subtitle}>{d.time} · {d.name}</Text><Text style={s.text}>{d.dosage}</Text></View>
+              </View>
+              <View style={{alignSelf:'flex-start',paddingHorizontal:12,paddingVertical:6,borderRadius:20,backgroundColor:d.status==='taken'?'#DFF4EB':'#EAF1F9'}}>
+                <Text style={{fontSize:16,lineHeight:23,fontWeight:'600',color:d.status==='taken'?'#14675C':'#385675'}}>{statusLabel[d.status]}</Text>
+              </View>
               {user.role === "elder" && d.status !== "taken" && (
                 <View style={{flexDirection:"row",flexWrap:"wrap",gap:12}}>
                   <Button
@@ -452,10 +536,10 @@ function Home({
                 </View>
               )}
             </Card></View>
-          ))}</View>
+          ))}</View>}
           <Text style={s.subtitle}>Consultas de hoje</Text>
           {!state.data.appointments.length && (
-            <Text style={s.text}>Nenhuma consulta marcada para hoje.</Text>
+            <Card tone="yellow"><Text style={s.text}>Nenhuma consulta marcada para hoje.</Text></Card>
           )}
           {state.data.appointments.map((a: any) => (
             <Card key={a.id} tone="yellow"><Image source={require("./assets/prototype/calendar.png")} style={{width:48,height:56}} resizeMode="contain" />
@@ -471,8 +555,11 @@ function Home({
             </Card>
           ))}
           <Text style={s.subtitle}>Acesso rápido</Text>
-          <View style={{flexDirection:'row',flexWrap:'wrap',gap:14}}><MenuTile label="Medicamentos" actionLabel="Ver todos os medicamentos" subtitle="Horários e doses" icon="pills" onPress={()=>navigate('Medicamentos')}/><MenuTile label="Consultas" actionLabel="Ver próximas consultas" subtitle="Sua próxima visita" icon="calendar" warm onPress={()=>navigate('Consultas')}/></View>
-          <MenuRow label="Registros de dores" subtitle="Conte como você está se sentindo" icon="pain" onPress={()=>navigate('Dores')}/>
+          <View style={{flexDirection:'row',flexWrap:'wrap',gap:14}}>
+            <MenuTile label="Medicamentos" actionLabel="Ver todos os medicamentos" subtitle="Horários e doses" icon="pills" onPress={()=>navigate('Medicamentos')}/>
+            <MenuTile label="Consultas" actionLabel="Ver próximas consultas" subtitle="Agenda de atendimentos" icon="calendar" warm onPress={()=>navigate('Consultas')}/>
+            <MenuTile label="Registros de dores" subtitle={caregiver?"Acompanhe os registros":"Conte como você está se sentindo"} icon="pain" onPress={()=>navigate('Dores')}/>
+          </View>
           {user.role === "caregiver" && (
             <>
               <Text style={s.subtitle}>Histórico de doses</Text>
@@ -513,6 +600,7 @@ function Resources({
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
   const canWrite = true;
+  const caregiver = user.role === "caregiver";
   const label = {
     medications: "Medicamentos",
     appointments: "Consultas",
@@ -523,7 +611,9 @@ function Resources({
       ? medicationFields
       : kind === "appointments"
         ? appointmentFields
-        : contactFields;
+        : caregiver
+          ? contactFields.map(field => field.key === "is_primary" ? {...field,label:"Contato principal da pessoa idosa"} : field)
+          : contactFields;
   async function remove(item: any) {
     if (busy) return;
     setBusy(true);
@@ -648,12 +738,12 @@ function Resources({
                   <Text selectable style={s.text}>
                     {item.relationship} · {item.phone}
                     {Number(item.is_primary)
-                      ? "\n★ Contato principal do SOS"
+                      ? caregiver ? "\n★ Contato principal da pessoa idosa" : "\n★ Contato principal do SOS"
                       : ""}
                   </Text>
                   {!Number(item.is_primary) && (
                     <Button
-                      label="Usar no SOS"
+                      label={caregiver?"Definir como contato principal":"Usar no SOS"}
                       disabled={busy}
                       onPress={async () => {
                         if (busy) return;
@@ -722,7 +812,7 @@ function Resources({
                             ? "Desativar este medicamento? O histórico será preservado."
                             : kind === "appointments"
                               ? "Cancelar esta consulta?"
-                              : "Excluir este contato? Se for principal, o SOS ficará sem contato até você escolher outro.",
+                              : "Excluir este contato? Se for o principal, escolha outro após a exclusão.",
                           () => remove(item),
                         )
                       }
@@ -1266,14 +1356,23 @@ function Alerts({elder,caregiver}:{elder:number;caregiver:boolean}) {
   async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();}catch(e){setMessage((e as Error).message);}}
   return <><Text style={s.subtitle}>Alertas e acompanhamento</Text>{!!state.error&&<Text style={s.error}>{state.error}</Text>}
     {state.data?.items.length===0&&<Text style={s.text}>Nenhum alerta registrado.</Text>}
-    {state.data?.items.slice(0,15).map((a:any)=><Card key={a.id} tone={a.status==='resolved'?'blue':'yellow'}>
-      <Text style={s.subtitle}>{names[a.kind]}</Text><Text style={s.text}>{dateTime(a.created_at)} · {a.status==='open'?'Aguardando cuidador':a.status==='accepted'?'Em acompanhamento':'Concluído'}</Text>
+    {state.data?.items.slice(0,15).map((a:any)=><Card key={a.id} tone={a.status==='open'?'yellow':undefined}>
+      <Text style={s.subtitle}>{names[a.kind]}</Text>
+      <View style={s.row}>
+        <Text style={s.muted}>{dateTime(a.created_at)}</Text>
+        <Text style={[s.muted,{backgroundColor:a.status==='open'?'#F8E8C7':'#E2F2EB',
+          color:a.status==='open'?'#704A16':colors.green,fontWeight:'700',paddingHorizontal:10,paddingVertical:4,borderRadius:10}]}>
+          {a.status==='open'?'Aguardando cuidador':a.status==='accepted'?'Em acompanhamento':'Concluído'}
+        </Text>
+      </View>
       {!!a.accepted_name&&<Text style={s.text}>Acompanhado por {a.accepted_name}</Text>}
-      {caregiver&&a.status==='open'&&<Button label="Vou acompanhar" onPress={()=>update(a.id,'accepted')} />}
-      {caregiver&&a.status!=='resolved'&&<Button label="Concluir atendimento" onPress={()=>confirmAction('Você verificou a situação e deseja concluir este alerta?',()=>update(a.id,'resolved'))} />}
+      {caregiver&&a.status!=='resolved'&&<View style={s.row}>
+        {a.status==='open'&&<Button label="Vou acompanhar" onPress={()=>update(a.id,'accepted')} />}
+        <Button label="Concluir atendimento" tone={a.status==='open'?'light':'blue'} onPress={()=>confirmAction('Você verificou a situação e deseja concluir este alerta?',()=>update(a.id,'resolved'))} />
+      </View>}
     </Card>)}{!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}</>;
 }
-function Assistant({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) {
+function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;navigate:(tab:string)=>void}) {
   const state=useData(`/elders/${elder}/assistant`),[message,setMessage]=useState(""),[draft,setDraft]=useState(""),[busy,setBusy]=useState(false),[action,setAction]=useState<string|null>(null),[confirmations,setConfirmations]=useState<any[]>([]),[doseDate,setDoseDate]=useState("");
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
   async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value});setDraft("");setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
@@ -1282,13 +1381,17 @@ function Assistant({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) 
     <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
     <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
     <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
-    {['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda'].map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
+    <View style={s.row}>
+      {(caregiver ? ['Remédios de hoje','Próximas consultas','Que dia é hoje?','Ver alertas'] :
+        ['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda']).map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
+    </View>
     {confirmations.map((d:any)=><Button key={d.time_id} label={`Confirmar ${d.name} · ${d.time}`} onPress={()=>confirmAction(`Você tomou ${d.name}, ${d.dosage}, da dose das ${d.time}?`,async()=>{try{await api(`/elders/${elder}/doses/${d.time_id}`,"POST",{date:doseDate,status:"taken"});setConfirmations(v=>v.filter(x=>x.time_id!==d.time_id));setMessage("Dose confirmada.");}catch(e){setMessage((e as Error).message);}})} />)}
-    {!!action&&<Button label={'Abrir '+action} onPress={()=>navigate(action)}/>}{!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}
+    {!!action&&<Button label={'Abrir '+(caregiver&&action==='SOS'?'Alertas':action)} onPress={()=>navigate(action)}/>}{!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}
     <Text style={s.muted}>O assistente consulta seus registros. Não faz diagnósticos nem altera prescrições.</Text></>;
 }
-function Reminders({user,navigate}:{user:User;navigate:(tab:string)=>void}) {
-  const [notice,setNotice]=useState<any>(null),[error,setError]=useState("");
+function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>void;onRecorded:()=>void}) {
+  const compact = useWindowDimensions().width < 600;
+  const [notice,setNotice]=useState<any>(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const seen=useRef(new Set<string>());
   useEffect(()=>{let alive=true;async function poll(){try{
     const data=await api('/notifications');if(!alive)return;
@@ -1302,8 +1405,38 @@ function Reminders({user,navigate}:{user:User;navigate:(tab:string)=>void}) {
   }catch{} }
   poll();const timer=setInterval(poll,20000);return()=>{alive=false;clearInterval(timer);};},[user.id]);
   if(!notice)return null;
-  async function confirm(status:string){try{await api(`/elders/${user.id}/doses/${notice.time_id}`,'POST',{date:notice.date,status});setNotice(null);setError('');navigate('Início');}catch(e){setError((e as Error).message);}}
-  return <Card tone="yellow"><Text accessibilityRole="header" style={s.subtitle}>Hora do seu cuidado</Text><Text style={s.text}>{notice.time} · {notice.name} · {notice.dosage}</Text><Text style={s.text}>Você já tomou esta dose?</Text><Button label="Já tomei esta dose" onPress={()=>confirm('taken')}/><Button label="Ainda não tomei" tone="light" onPress={()=>confirm('pending')}/><Button label="Ver medicamentos" tone="light" onPress={()=>{setNotice(null);navigate('Medicamentos');}}/>{!!error&&<Text style={s.error}>{error}</Text>}</Card>;
+  async function confirm(status:string) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/elders/${user.id}/doses/${notice.time_id}`,"POST",{date:notice.date,status});
+      setNotice(null);
+      onRecorded();
+      navigate("Início");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card tone="yellow">
+      <View style={{flexDirection:"row",gap:12,alignItems:"center"}}>
+        <AppIcon name="bell" color="#79511C"/>
+        <View style={{flex:1}}>
+          <Text accessibilityRole="header" style={s.subtitle}>Lembrete de medicamento</Text>
+          <Text style={s.text}>{notice.time} · {notice.name} · {notice.dosage}</Text>
+        </View>
+      </View>
+      <View style={s.row}>
+        <View style={compact&&{flex:1}}><Button label="Já tomei" busy={busy} onPress={()=>confirm('taken')}/></View>
+        <View style={compact&&{flex:1}}><Button label="Ainda não tomei" disabled={busy} tone="light" onPress={()=>confirm('pending')}/></View>
+        <View style={compact&&{width:"100%"}}><Button label="Ver medicamentos" disabled={busy} tone="light" onPress={()=>{setNotice(null);navigate('Medicamentos');}}/></View>
+      </View>
+      {!!error&&<Text style={s.error}>{error}</Text>}
+    </Card>
+  );
 }
 function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
   const [address, setAddress] = useState(getServer());
@@ -1330,7 +1463,10 @@ function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () =
   </Card>;
 }
 export default function App() {
+  const {width} = useWindowDimensions();
+  const desktop = Platform.OS === "web" && width >= 980;
   const [setup, setSetup] = useState(false);
+  const [doseRevision, setDoseRevision] = useState(0);
   const [user, setUser] = useState<User | null>(null),
     [starting, setStarting] = useState(true),
     [tab, setTabState] = useState("Início"),
@@ -1339,14 +1475,24 @@ export default function App() {
     [logoutBusy, setLogoutBusy] = useState(false);
   const navigationHistory = useRef<string[]>([]);
   const currentTab = useRef("Início");
-  function setTab(next:string){if(next!==currentTab.current){navigationHistory.current.push(currentTab.current);currentTab.current=next;setTabState(next);}}
+  const caregiver = user?.role === "caregiver";
+  function setTab(next:string) {
+    const destination = caregiver && next === "SOS" ? "Alertas" : next;
+    if (destination !== currentTab.current) {
+      navigationHistory.current.push(currentTab.current);
+      currentTab.current = destination;
+      setTabState(destination);
+    }
+  }
   function goBack(){const previous=navigationHistory.current.pop() || "Início";currentTab.current=previous;setTabState(previous);}
   const sessionGeneration = useRef(0);
   function loggedIn(u: User) {
     sessionGeneration.current++;
     setUser(u);
     setElder(u.role === "elder" ? Number(u.id) : 0);
-    setTab(u.role === "elder" ? "Início" : "Vínculos");
+    navigationHistory.current = [];
+    currentTab.current = u.role === "elder" ? "Início" : "Vínculos";
+    setTabState(currentTab.current);
     setSessionMessage("");
   }
   useEffect(() => {
@@ -1423,7 +1569,12 @@ export default function App() {
     return () => handler.remove();
   }, [tab]);
 
-  const tabs = ["Início", "Assistente", "SOS", "Cuidados"];
+  const tabs = [
+    {screen:"Início",label:"Início",icon:"home"},
+    {screen:"Assistente",label:"Assistente",icon:"chat"},
+    caregiver ? {screen:"Alertas",label:"Alertas",icon:"bell"} : {screen:"SOS",label:"SOS",icon:"help"},
+    {screen:"Cuidados",label:caregiver?"Cuidados":"Idoso",icon:"grid"},
+  ];
   const navigationActive=(name:string)=>tab===name||(name==="Cuidados"&&["Medicamentos","Consultas","Contatos","Dores","Vínculos","Meus dados","Termos de Uso","Política de Privacidade"].includes(tab));
   let screen: React.ReactNode = null;
   if (user) {
@@ -1445,13 +1596,12 @@ export default function App() {
     else if (tab === "Cuidados")
       screen = (
         <>
-          <Text style={s.title}>Seu espaço de cuidado</Text>
-          <Text style={s.text}>Tudo o que ajuda a cuidar de você.</Text>
-          <Text style={s.subtitle}>Sua rotina</Text>
+          <Text accessibilityRole="header" style={s.title}>{caregiver?"Cuidados da pessoa acompanhada":"Seu espaço de cuidado"}</Text>
+          <Text style={s.subtitle}>{caregiver?"Rotina de cuidado":"Sua rotina"}</Text>
           <View style={{flexDirection:'row',flexWrap:'wrap',gap:14}}><MenuTile label="Medicamentos" subtitle="Doses e horários" icon="pills" onPress={()=>setTab('Medicamentos')}/><MenuTile label="Consultas" subtitle="Agenda e próximos encontros" icon="calendar" warm onPress={()=>setTab('Consultas')}/></View>
-          <MenuRow label="Dores" subtitle="Registre e acompanhe como está se sentindo" icon="pain" onPress={()=>setTab('Dores')}/>
+          <MenuRow label="Dores" subtitle={caregiver?"Acompanhe como a pessoa idosa está se sentindo":"Registre e acompanhe como está se sentindo"} icon="pain" onPress={()=>setTab('Dores')}/>
           <MenuRow label="Contatos" subtitle="Pessoas de confiança para uma ligação" icon="contacts" onPress={()=>setTab('Contatos')}/>
-          <MenuRow label="Vínculos" subtitle="Quem compartilha o cuidado com você" icon="link" onPress={()=>setTab('Vínculos')}/>
+          <MenuRow label="Vínculos" subtitle={caregiver?"Pessoas que você acompanha":"Quem compartilha o cuidado com você"} icon="link" onPress={()=>setTab('Vínculos')}/>
           <Text style={[s.subtitle,{marginTop:12}]}>Sua conta</Text>
           <MenuRow label="Meus dados" subtitle="Perfil, e-mail e entrada com biometria" icon="person" onPress={()=>setTab('Meus dados')}/>
           <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}><Button label="Termos de Uso" tone="light" onPress={()=>setTab('Termos de Uso')}/><Button label="Política de Privacidade" tone="light" onPress={()=>setTab('Política de Privacidade')}/></View>
@@ -1467,7 +1617,7 @@ export default function App() {
           />
         </>
       );
-    else if (tab === "Assistente" && elder) screen = <Assistant key={elder} elder={elder} navigate={setTab} />;
+    else if (tab === "Assistente" && elder) screen = <Assistant key={elder} elder={elder} caregiver={caregiver} navigate={setTab} />;
     else if (!elder)
       screen = (
         <>
@@ -1479,9 +1629,11 @@ export default function App() {
         </>
       );
     else if (tab === "Início")
-      screen = <Home key={elder} elder={elder} user={user} navigate={setTab} />;
-    else if (tab === "SOS")
+      screen = <Home key={elder} elder={elder} user={user} navigate={setTab} doseRevision={doseRevision} />;
+    else if (tab === "SOS" && !caregiver)
       screen = <SOS key={elder} elder={elder} navigate={setTab} />;
+    else if (tab === "Alertas" && caregiver)
+      screen = <Alerts key={elder} elder={elder} caregiver />;
     else if (tab === "Dores")
       screen = <Pains key={elder} elder={elder} user={user} />;
     else
@@ -1500,18 +1652,62 @@ export default function App() {
         />
       );
   }
+  const navigation = (
+    <View accessibilityRole="tablist" accessibilityLabel="Navegação principal" style={{
+      flexDirection:desktop?"column":"row",gap:4,padding:desktop?0:5,
+      backgroundColor:"#FFF",borderTopWidth:desktop?0:1,borderColor:"#DAE4F0",
+    }}>
+      {tabs.map(item => {
+        const active = navigationActive(item.screen);
+        const emergency = item.screen === "SOS";
+        const ink = emergency ? colors.red : active ? colors.blue : colors.dark;
+        return (
+          <Pressable key={item.screen} accessibilityRole="tab" accessibilityState={{selected:active}}
+            aria-selected={active} accessibilityLabel={item.label} onPress={() => setTab(item.screen)}
+            style={({pressed,hovered}:{pressed:boolean;hovered?:boolean})=>({
+              flex:desktop?undefined:1, minWidth:0,minHeight:desktop?54:59,
+              flexDirection:desktop?"row":"column", alignItems:"center",justifyContent:desktop?"flex-start":"center",
+              gap:desktop?12:4,paddingHorizontal:desktop?14:2,borderRadius:13,
+              backgroundColor:emergency?(active||pressed||hovered?"#FDE5E7":"#FFF5F5"):active||pressed||hovered?colors.light:"transparent",
+            })}>
+            <AppIcon name={item.icon} size={23} color={ink}/>
+            <Text style={{fontSize:desktop?17:14,color:ink,fontWeight:active||emergency?"700":"500"}}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
   return (
     <SafeAreaProvider>
       <SafeAreaView style={s.page}>
         <StatusBar style="dark" />
+        <View style={{flex:1,flexDirection:desktop?"row":"column"}}>
+        {user && desktop && (
+          <View style={{width:232,backgroundColor:"#FFF",borderRightWidth:1,borderColor:"#DAE4F0",
+            paddingHorizontal:16,paddingVertical:20,gap:25}}>
+            <BrandHeader/>
+            {navigation}
+            <View style={{flex:1}}/>
+            <Pressable accessibilityRole="button" accessibilityLabel="Abrir meus dados" onPress={()=>setTab("Meus dados")}
+              style={({pressed})=>({flexDirection:"row",alignItems:"center",padding:12,minHeight:62,gap:10,
+                borderRadius:14,backgroundColor:pressed?colors.light:"#F3F7FC"})}>
+              <AppIcon name="person" size={22}/>
+              <View style={{flex:1,minWidth:0}}>
+                <Text style={[s.muted,{color:colors.dark,fontWeight:"700"}]}>Meus dados</Text>
+                <Text numberOfLines={1} style={s.muted}>{user.name}</Text>
+              </View>
+              <AppIcon name="chevron" size={16}/>
+            </Pressable>
+          </View>
+        )}
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth:0 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <ScrollView
             ref={scroll}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={s.content}
+            contentContainerStyle={[s.content, desktop && {padding:32,paddingTop:28}]}
           >
             {!!sessionMessage && (
               <Text accessibilityRole="alert" style={s.error}>
@@ -1525,102 +1721,32 @@ export default function App() {
                 onCancel={getServer() ? () => setSetup(false) : undefined} />
             ) : user ? (
               <>
-                {user.role === "caregiver" && (
-                  <Button
-                    label="Selecionar outro idoso · Vínculos"
-                    tone="light"
-                    onPress={() => setTab("Vínculos")}
-                  />
-                )}{" "}
-                <BrandHeader name={user.name} onProfile={()=>setTab("Meus dados")} />
+                {!desktop && <BrandHeader name={user.name} onProfile={()=>setTab("Meus dados")} />}
+                {caregiver && tab !== "Vínculos" && (
+                  <View style={{alignSelf:desktop?"flex-end":"stretch"}}>
+                    <Button label="Selecionar outro idoso · Vínculos" tone="light" onPress={() => setTab("Vínculos")} />
+                  </View>
+                )}
                 {!["Início","Termos de Uso","Política de Privacidade"].includes(tab) && <BackButton onPress={goBack} />}
-                <Reminders user={user} navigate={setTab} />
+                <Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />
                 {screen}
               </>
             ) : (
               <>
-                <View style={{width:"100%",maxWidth:560,alignSelf:"center",gap:16}}><Auth onLogin={loggedIn} onScreenChange={()=>scroll.current?.scrollTo({y:0,animated:false})} /></View>
+                <View style={{width:"100%",maxWidth:desktop?1040:560,alignSelf:"center",
+                  flexDirection:desktop?"row":"column",alignItems:desktop?"flex-start":"stretch",gap:20,marginTop:desktop?32:0}}>
+                  {desktop && <AuthBrandPanel/>}
+                  <View style={[s.card,{flex:desktop?1:undefined,minWidth:0,padding:desktop?32:16,gap:16}]}>
+                    <Auth showBrand={!desktop} onLogin={loggedIn} onScreenChange={()=>scroll.current?.scrollTo({y:0,animated:false})} />
+                  </View>
+                </View>
                 {Platform.OS !== "web" && !androidWebPackage && <Button label="Configurar servidor" tone="light" onPress={() => setSetup(true)} />}
               </>
             )}
           </ScrollView>
         </KeyboardAvoidingView>
-        {user && (
-          <View
-            style={{
-              flexDirection: "row",
-              borderTopWidth: 1,
-              borderColor: "#ABB4C0",
-              backgroundColor: "white",
-            }}
-          >
-            {tabs.map((t) => (
-              <Pressable
-                key={t}
-                accessibilityRole="tab"
-                aria-selected={
-                  tab === t ||
-                  (t === "Cuidados" &&
-                    [
-                      "Medicamentos",
-                      "Consultas",
-                      "Contatos",
-                      "Dores",
-                      "Vínculos", "Meus dados", "Termos de Uso", "Política de Privacidade",
-                    ].includes(tab))
-                }
-                accessibilityState={{
-                  selected:
-                    tab === t ||
-                    (t === "Cuidados" &&
-                      [
-                        "Medicamentos",
-                        "Consultas",
-                        "Contatos",
-                        "Dores",
-                        "Vínculos", "Meus dados", "Termos de Uso", "Política de Privacidade",
-                      ].includes(tab)),
-                }}
-                accessibilityLabel={t==="Cuidados"?"Idoso":t}
-                onPress={() => setTab(t)}
-                style={{
-                  flex: 1,
-                  minHeight: 72,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  padding: 6,
-                  margin: 4,
-                  borderRadius: 18,
-                  gap: 4,
-                  backgroundColor:navigationActive(t)?(t==="SOS"?"#FFF0EE":"#EAF1F9"):"transparent",
-                }}
-              >
-                {t==="Cuidados" && <Image source={require("./assets/prototype/elder.png")} style={{width:28,height:36}} resizeMode="contain" />}
-                {t!=="Cuidados" && <AppIcon name={t==='Início'?'home':t==='Assistente'?'chat':'help'} size={28} color={t==='SOS'?colors.red:colors.blue}/>}
-                <Text
-                  style={{
-                    fontSize: 16,
-                    color: t === "SOS" ? colors.red : colors.dark,
-                    fontWeight:
-                      tab === t ||
-                      (t === "Cuidados" &&
-                        [
-                          "Medicamentos",
-                          "Consultas",
-                          "Contatos",
-                          "Dores",
-                          "Vínculos",
-                        ].includes(tab))
-                        ? "700"
-                        : "400",
-                  }}
-                >
-                  {t==="Cuidados"?"Idoso":t}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        {user && !desktop && navigation}
+        </View>
       </SafeAreaView>
     </SafeAreaProvider>
   );

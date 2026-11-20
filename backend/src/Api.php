@@ -65,6 +65,7 @@ final class Api {
     }
     public function dispatch(string $method,string $path,array $data,string $authorization,string $ip): array {
         if ($method==='GET' && $path==='/health') { $this->query('SELECT 1'); return ['status'=>'ok','timezone'=>date_default_timezone_get()]; }
+        if ($method==='GET' && $path==='/auth/demo') return ['items'=>$this->demoProfiles($ip)];
         if ($method==='POST' && $path==='/auth/register') return $this->register($data,$ip);
         if ($method==='POST' && $path==='/auth/login') return $this->login($data,$ip);
         if ($method==='POST' && in_array($path,['/auth/forgot-password','/auth/reset-password'],true)) { $this->rate('recovery:ip:'.$ip,12); $this->rate('recovery:email:'.strtolower(trim((string)($data['email']??''))),8); return (new PasswordRecovery($this->db))->handle($path,$data); }
@@ -164,6 +165,14 @@ final class Api {
         } catch(PDOException $e) { if (($e->errorInfo[1]??0)===1062) $this->fail(409,'Este telefone ou e-mail já possui uma conta.'); throw $e; }
     }
     private function login(array $data,string $ip): array {
+        if (array_key_exists('demo_email',$data)) {
+            $email=$data['demo_email'];
+            $profile=is_string($email) ? DEMO_PROFILES[$email] ?? null : null;
+            if (!demoWebEnabled($ip) || !$profile || !$this->hasDemoProfile($email,$profile)) {
+                $this->fail(404,'Demonstração indisponível.');
+            }
+            $data=['phone'=>$profile['phone'],'password'=>demoPassword()];
+        }
         $phone=$this->phone($data); $password=$this->text($data,'password',72);
         $this->rate('login:ip:'.$ip,40); $this->rate('login:phone:'.$phone,10);
         $u=$this->query('SELECT * FROM users WHERE phone=?',[$phone])->fetch();
@@ -172,6 +181,18 @@ final class Api {
         $token=bin2hex(random_bytes(32)); $hours=max(1,min(720,(int)(getenv('SESSION_HOURS')?:168)));
         $this->query('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',[hash('sha256',$token),$u['id'],gmdate('Y-m-d H:i:s',time()+$hours*3600)]);
         unset($u['password_hash']); return ['token'=>$token,'user'=>$u,'expires_in_seconds'=>$hours*3600];
+    }
+    private function demoProfiles(string $ip): array {
+        if (!demoWebEnabled($ip)) return [];
+        $available=[];
+        foreach (DEMO_PROFILES as $email=>$profile) {
+            if ($this->hasDemoProfile($email,$profile)) $available[]=['email'=>$email,'role'=>$profile['role']];
+        }
+        return $available;
+    }
+    private function hasDemoProfile(string $email,array $profile): bool {
+        return (bool)$this->query('SELECT 1 FROM users WHERE email=? AND phone=? AND role=?',
+            [$email,$profile['phone'],$profile['role']])->fetchColumn();
     }
     private function medications(string $method,int $elder,int $id,array $data): array {
         if ($method==='GET') {
@@ -350,7 +371,16 @@ final class Api {
             if ($method!=='POST') $this->fail(405,'Método não permitido.');
             $this->rate('assistant:'.$this->user['id'],60); $message=$this->text($data,'message',500);
             $q=strtolower(strtr($message,['á'=>'a','à'=>'a','â'=>'a','ã'=>'a','é'=>'e','ê'=>'e','í'=>'i','ó'=>'o','ô'=>'o','õ'=>'o','ú'=>'u','ç'=>'c','Á'=>'a','À'=>'a','Â'=>'a','Ã'=>'a','É'=>'e','Ê'=>'e','Í'=>'i','Ó'=>'o','Ô'=>'o','Õ'=>'o','Ú'=>'u','Ç'=>'c'])); $action=null; $confirmationDoses=[];
-            if (preg_match('/(sos|socorro|ajuda|emergencia)/',$q)) { $reply='Abra o SOS para pedir ajuda aos seus cuidadores e ligar para o contato de confiança.'; $action='SOS'; }
+            $caregiver=$this->user['role']==='caregiver';
+            $assistantOptions=$caregiver
+                ? 'Posso consultar medicamentos e consultas da pessoa acompanhada, informar a data e a hora atuais ou abrir Dores e Alertas.'
+                : 'Posso consultar seus medicamentos e consultas, informar a data e a hora atuais ou ajudar a abrir Dores e SOS.';
+            if ($caregiver && preg_match('/\b(sos|socorro|ajuda|emergencia|alertas?)\b/',$q)) {
+                $reply='Abra Alertas para acompanhar os pedidos de ajuda da pessoa idosa.'; $action='Alertas';
+            }
+            elseif (!$caregiver && preg_match('/(sos|socorro|ajuda|emergencia)/',$q)) {
+                $reply='Abra o SOS para pedir ajuda aos seus cuidadores e ligar para o contato de confiança.'; $action='SOS';
+            }
             elseif (preg_match('/(dor|doendo)/',$q)) { $reply='Você pode registrar onde dói e a intensidade em Dores para compartilhar com seus cuidadores.'; $action='Dores'; }
             elseif (preg_match('/(ja tomei|tomei o|tomei a|confirmar dose)/',$q)) {
                 if($this->user['role']!=='elder')$this->fail(403,'A confirmação precisa ser feita pela pessoa idosa.');
@@ -363,8 +393,8 @@ final class Api {
                 $a=$this->query('SELECT * FROM appointments WHERE elder_id=? AND cancelled=0 AND scheduled_at>=UTC_TIMESTAMP() ORDER BY scheduled_at LIMIT 3',[$elder])->fetchAll();
                 $reply=$a ? 'Próximas consultas: '.implode('; ',array_map(fn($x)=>$x['specialty'].' em '.(new DateTimeImmutable($x['scheduled_at'],new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i').' em '.$x['location'],$a)) : 'Você não tem próximas consultas cadastradas.'; $action='Consultas';
             } elseif (preg_match('/^(?:(?:por favor|oi|ola)[ ,]*)?(?:que (?:dia|horas?) (?:e|sao)(?: hoje| agora)?|qual (?:e )?(?:a data|o dia|o horario|a hora)(?: de hoje| atual)?|hora atual|data de hoje)[?!., ]*$/',$q)) $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
-            elseif(preg_match('/^(oi|ola|bom dia|boa tarde|boa noite|como pode me ajudar|o que voce faz)[?!., ]*$/',$q)) $reply='Olá! Posso consultar seus medicamentos e consultas, informar a data e a hora atuais ou ajudar a abrir Dores e SOS. Como posso ajudar?';
-            else $reply='Não tenho acesso a programação de TV, notícias ou outras informações externas. Posso consultar seus medicamentos, suas consultas, a data e a hora atuais, ou abrir Dores e SOS. O que você gostaria de consultar?';
+            elseif(preg_match('/^(oi|ola|bom dia|boa tarde|boa noite|como pode me ajudar|o que voce faz)[?!., ]*$/',$q)) $reply='Olá! '.$assistantOptions.' Como posso ajudar?';
+            else $reply='Não tenho acesso a programação de TV, notícias ou outras informações externas. '.$assistantOptions.' O que você gostaria de consultar?';
             $this->query('INSERT INTO assistant_messages(elder_id,content,reply) VALUES(?,?,?)',[$elder,$message,$reply]);
             if($this->user['role']==='elder') $this->activity($elder,'assistant_used');
             return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d')];

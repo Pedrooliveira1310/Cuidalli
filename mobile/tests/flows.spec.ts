@@ -85,6 +85,8 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await expect(
     caregiver.getByText("Ainda não há atividade registrada pelo idoso."),
   ).toBeVisible();
+  await expect(caregiver.getByRole("tab", { name: "SOS", exact: true })).toHaveCount(0);
+  await expect(caregiver.getByRole("tab", { name: "Alertas", exact: true })).toBeVisible();
   await caregiver
     .getByRole("button", { name: "Ver todos os medicamentos" })
     .click();
@@ -120,6 +122,8 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await expect(caregiver.getByText("Medicamento salvo.")).toBeVisible();
   await page.getByRole("tab", { name: "Início", exact: true }).click();
   await expect(page.getByText("08:00 · Remédio E2E")).toBeVisible();
+  const progress = page.getByRole("progressbar", { name: "Doses confirmadas" });
+  await expect(progress).toHaveAttribute("aria-valuenow", "0");
   await page
     .getByRole("button", { name: "Ainda não", exact: true })
     .first()
@@ -132,6 +136,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     .first()
     .click();
   await expect(page.getByText("✓ Já tomou", { exact: true })).toBeVisible();
+  await expect(progress).toHaveAttribute("aria-valuenow", "1");
   await page
     .getByRole("button", { name: "Registros de dores", exact: true })
     .click();
@@ -146,7 +151,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
       "Dor registrada. Seus cuidadores podem acompanhar o registro e o alerta.",
     ),
   ).toBeVisible();
-  await caregiver.getByRole("tab", { name: "Idoso", exact: true }).click();
+  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
   await caregiver.getByRole("button", { name: "Dores", exact: true }).click();
   await expect(caregiver.getByText("4/10 · Joelho esquerdo")).toBeVisible();
   await caregiver
@@ -168,7 +173,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     fullPage: true,
   });
   // Consultas e contatos também usam a API real do banco isolado.
-  await caregiver.getByRole("tab", { name: "Idoso", exact: true }).click();
+  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
   await caregiver
     .getByRole("button", { name: "Consultas", exact: true })
     .click();
@@ -198,7 +203,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     .getByRole("button", { name: "Cancelar consulta", exact: true })
     .click();
   await expect(caregiver.getByText("Consulta cancelada.")).toBeVisible();
-  await caregiver.getByRole("tab", { name: "Idoso", exact: true }).click();
+  await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
   await caregiver
     .getByRole("button", { name: "Contatos", exact: true })
     .click();
@@ -217,11 +222,11 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     (r) => r.url().includes("/contacts/") && r.request().method() === "PATCH",
   );
   await caregiver
-    .getByRole("button", { name: "Usar no SOS", exact: true })
+    .getByRole("button", { name: "Definir como contato principal", exact: true })
     .click();
   expect((await primarySaved).ok()).toBeTruthy();
   await expect(
-    caregiver.getByRole("button", { name: "Usar no SOS", exact: true }),
+    caregiver.getByRole("button", { name: "Definir como contato principal", exact: true }),
   ).toHaveCount(1);
   const contacts = await request.get(`${base}/elders/${elder}/contacts`, {
     headers: { Authorization: `Bearer ${elderLogin.token}` },
@@ -244,7 +249,10 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   const sosSaved=page.waitForResponse(r=>r.url().endsWith(`/elders/${elder}/sos`)&&r.request().method()==='POST');
   await page.getByRole('button',{name:'SOS: pedir ajuda a Contato SOS E2E'}).click();
   expect((await sosSaved).ok()).toBeTruthy();
-  await caregiver.getByRole('tab',{name:'Início',exact:true}).click();
+  await caregiver.getByRole('tab',{name:'Assistente',exact:true}).click();
+  await caregiver.getByRole('button',{name:'Ver alertas',exact:true}).click();
+  await expect(caregiver.getByRole('button',{name:'Abrir SOS',exact:true})).toHaveCount(0);
+  await caregiver.getByRole('button',{name:'Abrir Alertas',exact:true}).click();
   const sosCard=caregiver.getByText('Pedido de ajuda',{exact:true}).locator('..');
   await sosCard.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
   await expect(sosCard.getByText(/Em acompanhamento/)).toBeVisible();

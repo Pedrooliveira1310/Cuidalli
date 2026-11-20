@@ -15,6 +15,9 @@ const paths:Record<string,string>={
  check:'m5 12 4 4L19 6',
  chevron:'m9 5 7 7-7 7',
  shield:'M12 2 3 6v6c0 5 9 10 9 10s9-5 9-10V6ZM8 12l3 3 5-6',
+ bell:'M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9m-8 12a2 2 0 0 0 4 0',
+ grid:'M3 3h7v7H3Zm11 0h7v7h-7ZM3 14h7v7H3Zm11 0h7v7h-7Z',
+ heart:'M20.8 4.8a5.5 5.5 0 0 0-7.8 0L12 5.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l8.9 8.9 8.8-8.9a5.5 5.5 0 0 0 0-7.8Z',
 };
 export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:number;color?:string}){
  if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
@@ -23,27 +26,89 @@ export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:numb
 export function BrandHeader({onProfile,name,large=false}:{onProfile?:()=>void;name?:string;large?:boolean}){
  return <View style={{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:large?14:8,marginBottom:large?8:0}}>
   <View style={{width:large?72:48,height:large?72:48,borderRadius:large?22:16,overflow:'hidden',backgroundColor:'#FFF',borderWidth:1,borderColor:'#E3EAF2'}}><Image source={require('../assets/brand/logo-mark.png')} accessibilityLabel="Logo Cuidali: cuidado entre gerações" style={{width:'100%',height:'100%'}} resizeMode="contain"/></View>
-  <View style={{flex:1}}><Text style={{fontSize:large?32:23,fontWeight:'800',color:colors.dark,letterSpacing:-.6}}>Cuidali</Text><Text style={{fontSize:16,color:'#52677E',lineHeight:23}}>Cuidar é estar por perto.</Text></View>
+  <View style={{flex:1}}><Text style={{fontSize:large?32:24,fontWeight:'800',color:colors.dark,letterSpacing:-.8}}>Cuidali</Text><Text style={{fontSize:15,color:'#4D6079',lineHeight:22}}>Cuidar é estar por perto.</Text></View>
   {onProfile&&<Pressable accessibilityRole="button" accessibilityLabel="Abrir meus dados" onPress={onProfile} style={{width:48,height:48,borderRadius:24,backgroundColor:'#DFEAF6',alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#C5D8ED'}}><Text style={{fontSize:20,fontWeight:'700',color:colors.blue}}>{(name||'C').slice(0,1).toUpperCase()}</Text></Pressable>}
  </View>;
 }
-export function DayHero({name,date,summary}:{name:string;date:string;summary?:{taken:number;total:number}}){
- return <View style={{backgroundColor:'#E8F0FA',padding:24,borderRadius:28,borderWidth:1,borderColor:'#D6E3F3',gap:10,overflow:'hidden'}}>
-  <View style={{flexDirection:'row',alignItems:'center',gap:8}}><View style={{width:8,height:8,borderRadius:4,backgroundColor:'#4B7EA9'}}/><Text style={{fontSize:16,fontWeight:'700',color:'#43658A'}}>SEU DIA, COM MAIS CUIDADO</Text></View>
-  <Text style={[s.title,{fontSize:34,lineHeight:42,letterSpacing:-.7}]}>Olá, {name}</Text>
-  <Text style={[s.text,{color:'#415B76'}]}>{date.charAt(0).toUpperCase()+date.slice(1)}</Text>
-  <View style={{height:1,backgroundColor:'#CBDBEC',marginVertical:4}}/>
-  <Text style={{fontSize:18,lineHeight:26,color:'#294D73'}}>{summary&&summary.total>0?`${summary.taken} de ${summary.total} doses confirmadas hoje`:'Seus lembretes e cuidados, em um só lugar.'}</Text>
- </View>;
+export function AuthBrandPanel(){
+  return (
+    <View style={{width:'43%',minHeight:635,backgroundColor:'#143B66',borderRadius:28,
+      padding:32,justifyContent:'center',gap:24,overflow:'hidden'}}>
+      <View pointerEvents="none" style={{position:'absolute',top:-70,right:-155,
+        width:500,height:500,borderRadius:250,borderWidth:70,borderColor:'#FFFFFF0C'}}/>
+      <View style={{width:92,height:92,backgroundColor:'#FFF',borderRadius:25,overflow:'hidden'}}>
+        <Image source={require('../assets/brand/logo-mark.png')} accessibilityLabel="Logo Cuidali: cuidado entre gerações"
+          style={{width:'100%',height:'100%'}} resizeMode="contain"/>
+      </View>
+      <View style={{gap:8}}>
+        <Text style={{color:'#ACD5FF',fontSize:22,fontWeight:'800'}}>Cuidali</Text>
+        <Text style={{color:'#FFF',fontSize:42,lineHeight:48,fontWeight:'800',letterSpacing:-1.2}}>
+          Cuidar é estar por perto.
+        </Text>
+        <Text style={{color:'#D6E8FA',fontSize:18,lineHeight:27}}>
+          Organize medicamentos e consultas e compartilhe a rotina com pessoas de confiança.
+        </Text>
+      </View>
+    </View>
+  );
+}
+export function DayHero({name,date,summary,elderName,wide}:{
+  name:string;
+  date:string;
+  summary?:{taken:number;total:number};
+  elderName?:string;
+  wide:boolean;
+}){
+  const progress = summary?.total ? Math.round(summary.taken * 100 / summary.total) : 0;
+  return (
+    <View style={{
+      backgroundColor:'#143B66', padding:wide?32:21, borderRadius:25, gap:20,
+      flexDirection:wide?'row':'column', alignItems:wide?'center':'stretch', overflow:'hidden',
+    }}>
+      <View pointerEvents="none" style={{
+        position:'absolute', right:-90, top:-150, width:420, height:420, borderRadius:210,
+        borderWidth:52, borderColor:'#FFFFFF0C',
+      }}/>
+      <View style={{flex:wide?1:undefined, minWidth:0,gap:8}}>
+        <View style={{flexDirection:'row',alignItems:'center',gap:9}}>
+          <AppIcon name="calendar" size={19} color="#A9D5FC"/>
+          <Text style={[s.muted,{color:'#D6E8FA',flexShrink:1}]}>
+            {date.charAt(0).toUpperCase()+date.slice(1)}
+          </Text>
+        </View>
+        <Text accessibilityRole="header" style={[s.title,{fontSize:wide?42:34,lineHeight:wide?50:42,color:'#FFF'}]}>
+          Olá, {name}
+        </Text>
+        {elderName && <Text style={[s.text,{color:'#D6E8FA'}]}>Acompanhando {elderName}</Text>}
+      </View>
+      {summary && (
+        <View style={{width:wide?265:'100%',padding:16,borderRadius:16,backgroundColor:'#0A2B50',gap:8}}>
+          <Text style={{color:'#FFF',fontSize:18,fontWeight:'700',lineHeight:24}}>Medicação de hoje</Text>
+          {!!summary.total && (
+            <View accessible accessibilityRole="progressbar" accessibilityLabel="Doses confirmadas"
+              aria-valuemin={0} aria-valuemax={summary.total} aria-valuenow={summary.taken}
+              accessibilityValue={{min:0,max:summary.total,now:summary.taken}}
+              style={{height:9,borderRadius:5,backgroundColor:'#3E6083',overflow:'hidden'}}>
+              <View style={{width:`${progress}%`,height:'100%',backgroundColor:'#7FE0CA'}}/>
+            </View>
+          )}
+          <Text style={[s.muted,{color:'#D6E8FA'}]}>
+            {summary.total ? `${summary.taken} de ${summary.total} doses confirmadas hoje` : 'Nenhuma dose programada'}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 }
 export function MenuTile({label,subtitle,icon,onPress,warm=false,actionLabel}:{label:string;subtitle:string;icon:string;onPress:()=>void;warm?:boolean;actionLabel?:string}){
- return <Pressable accessibilityRole="button" accessibilityLabel={actionLabel||label} onPress={onPress} style={({pressed})=>({flexGrow:1,flexBasis:'45%',minWidth:150,minHeight:156,padding:20,borderRadius:24,borderWidth:1,borderColor:warm?'#E9D8B6':'#D8E4F0',backgroundColor:pressed?'#E5EEF8':warm?'#FCF6E9':'#FFF',gap:12})}>
+ return <Pressable accessibilityRole="button" accessibilityLabel={actionLabel||label} onPress={onPress} style={({pressed,hovered}:{pressed:boolean;hovered?:boolean})=>({flexGrow:1,flexBasis:144,minWidth:0,minHeight:126,padding:16,borderRadius:18,borderWidth:1,borderColor:warm?'#E9D8B6':'#D8E4F0',backgroundColor:pressed||hovered?(warm?'#FFF0D1':'#E5EEF8'):warm?'#FFF9ED':'#FFF',gap:10})}>
   <View style={{width:48,height:48,borderRadius:16,backgroundColor:warm?'#F4E4C4':'#EAF1F9',alignItems:'center',justifyContent:'center'}}><AppIcon name={icon} color={warm?'#815C24':colors.blue}/></View>
-  <View style={{gap:5}}><Text style={{fontSize:18,lineHeight:26,fontWeight:'700',color:colors.dark}}>{label}</Text><Text style={{fontSize:16,lineHeight:23,color:'#53677D'}}>{subtitle}</Text></View>
+  <View style={{gap:4}}><Text style={{fontSize:18,lineHeight:25,fontWeight:'700',color:colors.dark}}>{label}</Text><Text style={s.muted}>{subtitle}</Text></View>
  </Pressable>;
 }
-export function MenuRow({label,subtitle,icon,onPress}:{label:string;subtitle:string;icon:string;onPress:()=>void}){
- return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({pressed})=>({flexDirection:'row',alignItems:'center',gap:16,padding:18,minHeight:90,backgroundColor:pressed?'#EAF1F9':'#FFF',borderRadius:22,borderWidth:1,borderColor:'#E0E8F1'})}>
+export function MenuRow({label,subtitle,icon,onPress,busy=false}:{label:string;subtitle:string;icon:string;onPress:()=>void;busy?:boolean}){
+ return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{busy,disabled:busy}}
+   disabled={busy} onPress={onPress} style={({pressed,hovered}:{pressed:boolean;hovered?:boolean})=>({flexDirection:'row',alignItems:'center',gap:12,padding:16,minHeight:78,backgroundColor:pressed||hovered?'#EAF1F9':'#FFF',borderRadius:18,borderWidth:1,borderColor:'#DCE5F1'})}>
   <View style={{width:46,height:46,borderRadius:15,backgroundColor:'#EAF1F9',alignItems:'center',justifyContent:'center'}}><AppIcon name={icon}/></View>
   <View style={{flex:1,gap:4}}><Text style={{fontSize:20,fontWeight:'700',color:colors.dark}}>{label}</Text><Text style={{fontSize:16,lineHeight:22,color:'#53677D'}}>{subtitle}</Text></View><AppIcon name="chevron" size={21}/>
  </Pressable>;

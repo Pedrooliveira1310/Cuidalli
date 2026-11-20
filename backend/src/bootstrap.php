@@ -11,6 +11,7 @@ if (is_file($env)) {
 }
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'America/Sao_Paulo');
 require_once __DIR__.'/PushService.php';
+require_once __DIR__.'/DemoAccounts.php';
 require_once __DIR__.'/Api.php';
 require_once __DIR__.'/PasswordRecovery.php';
 function database(): PDO {

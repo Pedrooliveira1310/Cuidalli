@@ -23,5 +23,6 @@ req('POST',"/elders/$elder/activity",[],$ct,403);req('POST',"/elders/$elder/acti
 $r=req('POST',"/elders/$elder/assistant",['message'=>'Quais meus remédios?'],$et);verify($r['action']==='Medicamentos','Assistente consulta medicação');
 $r=req('POST',"/elders/$elder/assistant",['message'=>'Preciso de ajuda'],$et);verify($r['action']==='SOS','Assistente encaminha SOS sem disparar pedido por engano');
 req('GET',"/elders/$elder/assistant",[],$ot,403);verify(count(req('GET',"/elders/$elder/assistant",[],$ct)['items'])===2,'Conversa persistente e compartilhada apenas com vínculo');
+$r=req('POST',"/elders/$elder/assistant",['message'=>'Preciso de ajuda'],$ct);verify($r['action']==='Alertas','O assistente encaminha o cuidador para acompanhar alertas');
 req('DELETE',"/links/$elder",[],$ct);req('GET',"/elders/$elder/alerts",[],$ct,403);verify(count(req('GET','/notifications',[],$ct)['items'])===0,'Remover vínculo remove acesso aos avisos');
 echo "$count verificações de release passaram.\n";

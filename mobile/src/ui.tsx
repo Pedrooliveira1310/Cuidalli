@@ -30,42 +30,43 @@ export function BackButton({onPress,label='Voltar'}:{onPress:()=>void;label?:str
  return <Pressable accessibilityRole="button" accessibilityLabel={'Voltar'+(label==='Voltar'?'':' · '+label)} onPress={onPress} style={{minHeight:48,alignSelf:'flex-start',flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:8,paddingVertical:8}}><Text style={{fontSize:28,color:colors.blue}}>←</Text><Text style={{fontSize:18,fontWeight:'600',color:colors.blue}}>{label}</Text></Pressable>;
 }
 export const colors = {
-  blue: "#39639A",
-  dark: "#1A365D",
-  light: "#D3E2EF",
+  blue: "#225BA5",
+  dark: "#122843",
+  light: "#E8F1FD",
   yellow: "#F2D6A2",
-  red: "#9E3131",
-  green: "#267244",
-  bg: "#F3F6FA",
+  red: "#A62836",
+  green: "#14675C",
+  bg: "#F3F6FB",
 };
 export const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bg },
   content: {
-    padding: 20,
+    padding: 16,
     paddingTop: 20,
     paddingBottom: 40,
     gap: 16,
     width: "100%",
-    maxWidth: 920,
+    maxWidth: 1120,
     alignSelf: "center",
   },
-  title: { fontSize: 30, lineHeight: 38, fontWeight: "700", color: colors.dark },
-  subtitle: { fontSize: 22, lineHeight: 30, fontWeight: "700", color: colors.dark },
-  text: { fontSize: 18, color: "#303842", lineHeight: 26 },
-  muted: { fontSize: 16, color: "#555D67", lineHeight: 23 },
+  title: { fontSize: 32, lineHeight: 40, fontWeight: "800", letterSpacing: -0.8, color: colors.dark },
+  subtitle: { fontSize: 22, lineHeight: 30, fontWeight: "700", letterSpacing: -0.3, color: colors.dark },
+  text: { fontSize: 18, color: "#35475F", lineHeight: 26 },
+  muted: { fontSize: 16, color: "#4D6079", lineHeight: 23 },
   card: {
     padding: 20,
-    borderRadius: 25,
+    borderRadius: 20,
     backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#DCE6F1",
+    borderColor: "#DCE5F1",
     gap: 14,
-    boxShadow: "0 4px 18px rgba(26,54,93,0.045)",
+    boxShadow: "0 5px 18px rgba(18,40,67,0.05)",
   },
   button: {
-    minHeight: 60,
-    padding: 16,
-    borderRadius: 16,
+    minHeight: 54,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 13,
     backgroundColor: colors.blue,
     justifyContent: "center",
     alignItems: "center",
@@ -79,8 +80,8 @@ export const styles = StyleSheet.create({
   input: {
     minHeight: 56,
     borderWidth: 1,
-    borderColor: "#9FB0C2",
-    borderRadius: 16,
+    borderColor: "#879CB5",
+    borderRadius: 12,
     padding: 16,
     fontSize: 18,
     backgroundColor: "#FFF",
@@ -96,6 +97,11 @@ export const styles = StyleSheet.create({
   error: { color: colors.red, fontSize: 18, lineHeight: 26 },
   success: { color: colors.green, fontSize: 18, lineHeight: 26 },
 });
+const buttonColors = {
+  blue: { rest: colors.blue, active: "#174781" },
+  red: { rest: colors.red, active: "#84202B" },
+  light: { rest: "#EAF1FB", active: "#DCE9FA" },
+};
 export function Button({
   label,
   onPress,
@@ -111,6 +117,7 @@ export function Button({
 }) {
   const formBusy = useContext(FormBusy);
   disabled = disabled || formBusy;
+  const palette = buttonColors[tone];
   return (
     <Pressable
       accessibilityRole="button"
@@ -118,15 +125,10 @@ export function Button({
       accessibilityState={{ disabled: busy || disabled, busy }}
       disabled={busy || disabled}
       onPress={onPress}
-      style={[
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         styles.button,
         {
-          backgroundColor:
-            tone === "red"
-              ? colors.red
-              : tone === "light"
-                ? "#E6EDF6"
-                : colors.blue,
+          backgroundColor: pressed || hovered ? palette.active : palette.rest,
           opacity: busy || disabled ? 0.6 : 1,
         },
       ]}
@@ -537,9 +539,9 @@ export function Card({
       style={[
         styles.card,
         tone && {
-          backgroundColor: tone === "blue" ? "#DFECF9" : "#F9E7C6",
+          backgroundColor: tone === "blue" ? "#F8FBFF" : "#FFF9ED",
           borderWidth: 1,
-          borderColor: tone === "blue" ? "#C9DBEE" : "#EBD4A8",
+          borderColor: tone === "blue" ? "#D7E5F8" : "#EAD8B4",
         },
       ]}
     >

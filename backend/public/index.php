@@ -43,6 +43,11 @@ try {
     if (strlen($raw)>16384) throw new ApiError(413,'Requisição muito grande.');
     $input = $raw === '' ? [] : json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
     if (!is_array($input) || ($input !== [] && array_is_list($input))) throw new ApiError(400,'Envie um objeto JSON.');
+    if ($requestPath==='/auth/login' && array_key_exists('demo_email',$input)) {
+        $host=$_SERVER['HTTP_HOST']??'';
+        if (!preg_match('/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/D',$host)
+            || $origin!=='http://'.$host) throw new ApiError(403,'Origem não permitida.');
+    }
     $api = new Api(database());
     $response = $api->dispatch($_SERVER['REQUEST_METHOD'], parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH), $input, $authorization, $_SERVER['REMOTE_ADDR'] ?? 'local');
     $secure=getenv('COOKIE_SECURE')==='true'||(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off');
