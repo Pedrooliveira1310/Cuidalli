@@ -24,6 +24,10 @@ A interface web compilada está em `backend/web`. Para recompilar, dentro de `mo
 
 ## Demonstração para apresentação
 
+Na tela inicial da versão web, selecione um e-mail na seção **Demonstração** para testar os dois perfis. Os exemplos do modo web ficam na aba do navegador e podem ser compartilhados entre os perfis ao sair da demonstração e entrar de novo na mesma aba. Cadastro e entrada em contas reais usam os botões da tela inicial.
+
+### Demonstração com servidor local
+
 Crie um banco local vazio com um nome terminado em `_demo_test`, por exemplo `cuidali_apresentacao_demo_test`. Na pasta do código, configure as variáveis do banco para esse ambiente e defina `CUIDALI_DEMO_PASSWORD` com uma senha exclusiva de demonstração. Use a mesma senha ao reabrir a demonstração com esse banco.
 
 ```powershell

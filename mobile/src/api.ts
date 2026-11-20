@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { normalizeServer } from "./server";
+import { browserDemoRequest, DemoRequestError, isBrowserDemo } from "./demo";
 export type User = {
   id: number;
   name: string;
@@ -63,6 +64,7 @@ export function setExpiredHandler(handler: () => void) {
   onExpired = handler;
 }
 export async function restoreToken() {
+  if (Platform.OS === "web" && isBrowserDemo()) return "demo";
   token =
     Platform.OS === "web"
       ? (window.CuidaliNative?.restoreSession() || null)
@@ -90,6 +92,14 @@ export async function api<T = any>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
+  if (Platform.OS === "web" && isBrowserDemo()) {
+    try {
+      return browserDemoRequest(path,method,body) as T;
+    } catch (error) {
+      if (error instanceof DemoRequestError) throw new ApiError(error.status,error.message);
+      throw error;
+    }
+  }
   if (!base)
     throw new Error(
       "Não foi possível conectar ao Cuidali. Tente novamente em instantes.",
@@ -110,6 +120,7 @@ export async function api<T = any>(
     });
     if (
       !response.ok &&
+      !isBrowserDemo() &&
       (requestToken || cookieRequest) &&
       token === requestToken &&
       [401, 403, 404].includes(response.status)

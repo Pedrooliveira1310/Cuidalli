@@ -47,6 +47,11 @@ import {
 } from "./src/ui";
 import { speak, listen, calendar } from "./src/device";
 import { openDialer } from "./src/phone";
+import { browserDemoProfiles, endBrowserDemo, isBrowserDemo, startBrowserDemo } from "./src/demo";
+
+function callContact(phone: string) {
+  return isBrowserDemo() ? Promise.resolve("Ligação simulada na demonstração.") : openDialer(phone);
+}
 const profileFields: Field[] = [
   { key: "name", label: "Nome completo" },
   { key: "birth_date", label: "Nascimento", placeholder: "DD/MM/AAAA" },
@@ -228,7 +233,8 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
   const [role, setRole] = useState<"elder" | "caregiver">("elder"),
     [stage, setStage] = useState<"profile" | "register" | "login">("profile"),
     [message, setMessage] = useState("");
-  const [demoProfiles, setDemoProfiles] = useState<DemoProfile[]>([]);
+  const demoProfiles = Platform.OS === "web" && !window.CuidaliNative ? browserDemoProfiles : [];
+  const [localDemoProfiles, setLocalDemoProfiles] = useState<DemoProfile[]>([]);
   const [openingDemo, setOpeningDemo] = useState("");
   const [demoError, setDemoError] = useState("");
   useEffect(() => {
@@ -236,7 +242,7 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
         !["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) return;
     let active = true;
     api<{items: DemoProfile[]}>("/auth/demo").then(result => {
-      if (active && Array.isArray(result.items)) setDemoProfiles(result.items);
+      if (active && Array.isArray(result.items)) setLocalDemoProfiles(result.items);
     }).catch(() => {});
     return () => { active = false; };
   }, []);
@@ -251,7 +257,8 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
     setOpeningDemo(email);
     setDemoError("");
     try {
-      await signIn({demo_email: email});
+      if (localDemoProfiles.some(profile=>profile.email===email)) await signIn({demo_email: email});
+      else onLogin(startBrowserDemo(email));
     } catch (error) {
       setDemoError((error as Error).message);
     } finally {
@@ -551,7 +558,10 @@ function Home({
                 {"\n"}
                 {a.location}
               </Text>
-              <Button label="Adicionar à agenda" tone="light" onPress={()=>calendar(a)} />
+              <Button label="Adicionar à agenda" tone="light" onPress={()=>{
+                if (isBrowserDemo()) setMessage("Consulta de exemplo. A agenda do aparelho fica fora da demonstração.");
+                else calendar(a);
+              }} />
             </Card>
           ))}
           <Text style={s.subtitle}>Acesso rápido</Text>
@@ -768,7 +778,7 @@ function Resources({
                     label={`Abrir discador: ${item.name}`}
                     tone="light"
                     onPress={async () =>
-                      setMessage(await openDialer(item.phone))
+                      setMessage(await callContact(item.phone))
                     }
                   />
                 </>
@@ -1303,13 +1313,16 @@ function SOS({
             accessibilityLabel={`SOS: pedir ajuda a ${contact.name}`}
             onPress={() =>
               confirmAction(
-                `Enviar pedido de ajuda aos cuidadores e ligar para ${contact.name}?`,
+                isBrowserDemo() ? "Registrar um pedido de ajuda de exemplo?" :
+                  `Enviar pedido de ajuda aos cuidadores e ligar para ${contact.name}?`,
                 async () => {
                   try {
                     const result = await api(`/elders/${elder}/sos`, "POST");
-                    setMessage(result.message + (Platform.OS !== "web" || window.CuidaliNative ? " " + await openDialer(contact.phone) : " Use Ligar para abrir o discador."));
+                    const detail = isBrowserDemo() ? "" : Platform.OS !== "web" || window.CuidaliNative
+                      ? " " + await callContact(contact.phone) : " Use Ligar para abrir o discador.";
+                    setMessage(result.message + detail);
                   } catch (e) {
-                    setMessage("Não foi possível registrar o alerta. " + await openDialer(contact.phone));
+                    setMessage("Não foi possível registrar o alerta. " + await callContact(contact.phone));
                   }
                 },
               )
@@ -1326,7 +1339,7 @@ function SOS({
           >
             <Text style={[s.title, { color: colors.red }]}>☎ SOS</Text>
           </Pressable>
-          <Button label={`Ligar para ${contact.name}`} tone="light" onPress={async()=>setMessage(await openDialer(contact.phone))} />
+          <Button label={`Ligar para ${contact.name}`} tone="light" onPress={async()=>setMessage(await callContact(contact.phone))} />
         </Card>
       ) : (
         !state.loading &&
@@ -1399,7 +1412,7 @@ function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>
       const time=new Date().toLocaleTimeString('sv-SE',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'});
       const due=data.doses.find((d:any)=>d.status!=='taken'&&d.time<=time&&!seen.current.has(data.date+':'+d.time_id));
       if(due){seen.current.add(data.date+':'+due.time_id);setNotice({...due,date:data.date});speak(`Lembrete de medicamento. ${due.name}, ${due.dosage}. Confira a dose antes de confirmar.`);}
-    }else if(Platform.OS==='web'&&!window.CuidaliNative&&!window.CuidaliWebPush?.isEnabled()&&'Notification' in window&&Notification.permission==='granted'){
+    }else if(Platform.OS==='web'&&!isBrowserDemo()&&!window.CuidaliNative&&!window.CuidaliWebPush?.isEnabled()&&'Notification' in window&&Notification.permission==='granted'){
       for(const a of data.items){const key='alert:'+a.id;if(!seen.current.has(key)){seen.current.add(key);new Notification(a.kind==='sos'?'Cuidali · Pedido de ajuda':'Cuidali · Novo aviso de cuidado',{body:'Abra o painel para acompanhar.',tag:key});}}
     }
   }catch{} }
@@ -1476,6 +1489,7 @@ export default function App() {
   const navigationHistory = useRef<string[]>([]);
   const currentTab = useRef("Início");
   const caregiver = user?.role === "caregiver";
+  const demo = !!user && isBrowserDemo();
   function setTab(next:string) {
     const destination = caregiver && next === "SOS" ? "Alertas" : next;
     if (destination !== currentTab.current) {
@@ -1517,12 +1531,19 @@ export default function App() {
     return () => setExpiredHandler(() => {});
   }, []);
   useEffect(()=>{
-    if(!user||Platform.OS!=='web'||window.CuidaliNative)return;
+    if(!user||demo||Platform.OS!=='web'||window.CuidaliNative)return;
     const restore=()=>window.CuidaliWebPush?.restore(token=>api('/push-tokens','POST',{token,platform:'web'})).catch(()=>{});
     restore();window.addEventListener('cuidali-push-ready',restore);return()=>window.removeEventListener('cuidali-push-ready',restore);
-  },[user?.id]);
+  },[user?.id,demo]);
   async function logout() {
     if (logoutBusy) return;
+    if (demo) {
+      endBrowserDemo();
+      setUser(null);
+      setElder(0);
+      setSessionMessage("");
+      return;
+    }
     setLogoutBusy(true);
     const generation = ++sessionGeneration.current;
     if(Platform.OS==='web'&&!window.CuidaliNative)window.CuidaliWebPush?.disable(token=>api('/push-tokens','DELETE',{token})).catch(()=>{});
@@ -1605,8 +1626,8 @@ export default function App() {
           <Text style={[s.subtitle,{marginTop:12}]}>Sua conta</Text>
           <MenuRow label="Meus dados" subtitle="Perfil, e-mail e entrada com biometria" icon="person" onPress={()=>setTab('Meus dados')}/>
           <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}><Button label="Termos de Uso" tone="light" onPress={()=>setTab('Termos de Uso')}/><Button label="Política de Privacidade" tone="light" onPress={()=>setTab('Política de Privacidade')}/></View>
-          <Text style={[s.subtitle,{marginTop:12}]}>Avisos neste dispositivo</Text>
-          {Platform.OS === "web" && !window.CuidaliNative && typeof Notification !== 'undefined' && <Button label="Ativar avisos neste navegador" tone="light" onPress={async()=>{try { if(!window.CuidaliWebPush) throw new Error("Os avisos ainda estão carregando. Tente novamente em instantes.");const message=await window.CuidaliWebPush.activate(token=>api('/push-tokens','POST',{token,platform:'web'}));setSessionMessage(message); } catch(e) {setSessionMessage((e as Error).message);}}} />}
+          {!demo && <Text style={[s.subtitle,{marginTop:12}]}>Avisos neste dispositivo</Text>}
+          {!demo && Platform.OS === "web" && !window.CuidaliNative && typeof Notification !== 'undefined' && <Button label="Ativar avisos neste navegador" tone="light" onPress={async()=>{try { if(!window.CuidaliWebPush) throw new Error("Os avisos ainda estão carregando. Tente novamente em instantes.");const message=await window.CuidaliWebPush.activate(token=>api('/push-tokens','POST',{token,platform:'web'}));setSessionMessage(message); } catch(e) {setSessionMessage((e as Error).message);}}} />}
           {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Ativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(true);setSessionMessage("Acompanhamento ativado neste aparelho.");}} />}
           {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Desativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(false);setSessionMessage("Avisos desativados neste aparelho.");}} />}
           <Button
@@ -1722,6 +1743,16 @@ export default function App() {
             ) : user ? (
               <>
                 {!desktop && <BrandHeader name={user.name} onProfile={()=>setTab("Meus dados")} />}
+                {demo && (
+                  <View style={[s.row,{justifyContent:"space-between",backgroundColor:colors.light,
+                    borderRadius:12,paddingLeft:12,paddingRight:6}]}>
+                    <Text style={[s.muted,{fontWeight:"700"}]}>Dados de demonstração</Text>
+                    <Pressable accessibilityRole="button" onPress={logout}
+                      style={{minHeight:48,justifyContent:"center",paddingHorizontal:8}}>
+                      <Text style={[s.muted,{color:colors.blue,textDecorationLine:"underline"}]}>Sair da demonstração</Text>
+                    </Pressable>
+                  </View>
+                )}
                 {caregiver && tab !== "Vínculos" && (
                   <View style={{alignSelf:desktop?"flex-end":"stretch"}}>
                     <Button label="Selecionar outro idoso · Vínculos" tone="light" onPress={() => setTab("Vínculos")} />

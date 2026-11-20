@@ -82,6 +82,10 @@ function client(fetch, storage = {}) {
           ? storage
           : name === "./server"
             ? moduleFor("src/server.ts", { URL })
+          : name === "./demo"
+            ? moduleFor("src/demo.ts", {
+                require: (dependency) => dependency === "./validation" ? validation : require(dependency),
+              })
           : require(name),
   });
 }

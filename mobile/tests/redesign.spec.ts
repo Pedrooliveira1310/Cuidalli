@@ -1,5 +1,51 @@
 import {test,expect} from '@playwright/test';
 const base=process.env.E2E_API_URL||'http://127.0.0.1:8010';
+
+test('a demonstração web preserva os dois perfis no navegador sem usar a API de contas', async ({page,browser})=>{
+ const origin = process.env.E2E_WEB_URL || 'http://localhost:8081';
+ await page.route('**/auth/demo',route=>route.fulfill({json:{items:[]}}));
+ const realRequests:string[]=[];
+ page.on('request',request=>{
+   const path=new URL(request.url()).pathname;
+   if (request.method()!=='GET' || /^\/(me|links|elders|notifications)(\/|$)/.test(path)) {
+     realRequests.push(request.method()+' '+path);
+   }
+ });
+ await page.goto(origin);
+ const elder=page.getByRole('button',{name:/maria\.cuidali@example\.com/});
+ const caregiver=page.getByRole('button',{name:/ana\.cuidali@example\.com/});
+ await expect(elder).toBeVisible();
+ await expect(page.getByRole('button',{name:'Continuar',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Já tenho conta · Entrar',exact:true})).toBeVisible();
+ realRequests.length=0;
+ await elder.click();
+ await expect(page.getByText('Dados de demonstração',{exact:true})).toBeVisible();
+ const progress=page.getByRole('progressbar',{name:'Doses confirmadas'});
+ await expect(progress).toHaveAttribute('aria-valuenow','1');
+ await page.getByRole('button',{name:'✓ Já tomei',exact:true}).click();
+ await expect(progress).toHaveAttribute('aria-valuenow','2');
+ await page.reload();
+ await expect(progress).toHaveAttribute('aria-valuenow','2');
+ await page.getByRole('button',{name:'Sair da demonstração',exact:true}).click();
+ await caregiver.click();
+ await page.getByRole('button',{name:'Acompanhar esta pessoa',exact:true}).click();
+ await expect(progress).toHaveAttribute('aria-valuenow','2');
+ await expect(page.getByRole('tab',{name:'SOS',exact:true})).toHaveCount(0);
+ await page.getByRole('tab',{name:'Alertas',exact:true}).click();
+ await page.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
+ await expect(page.getByText('Em acompanhamento',{exact:true})).toBeVisible();
+ expect(realRequests).toEqual([]);
+
+ const separate=await browser.newContext();
+ try{
+   const untouched=await separate.newPage();
+   await untouched.route('**/auth/demo',route=>route.fulfill({json:{items:[]}}));
+   await untouched.goto(origin);
+   await untouched.getByRole('button',{name:/maria\.cuidali@example\.com/}).click();
+   await expect(untouched.getByRole('progressbar',{name:'Doses confirmadas'})).toHaveAttribute('aria-valuenow','1');
+ }finally{await separate.close();}
+});
+
 test('entrada, recuperação e textos de privacidade são acessíveis',async({page})=>{
  await page.goto('/');
  await expect(page.getByLabel('Logo Cuidali: cuidado entre gerações')).toBeVisible();
