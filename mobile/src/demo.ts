@@ -20,12 +20,14 @@ type Alert = RecordId & {
   kind: "sos" | "pain"; status: "open" | "accepted" | "resolved";
   created_at: string; accepted_name?: string;
 };
+export type GuidedStep = "dose" | "request" | "switch-caregiver" | "accept" | "switch-elder" | "done";
 type Pain = RecordId & {
   view: string; region: string; type: string; intensity: number; onset: string;
   notes: string; created_at: string; views: {name: string; viewed_at: string}[];
 };
 type DemoState = {
   role: Role | null;
+  guide?: GuidedStep;
   users: Record<Role, DemoUser>;
   nextId: number;
   linked: boolean;
@@ -47,6 +49,7 @@ const profiles: Record<Role, DemoUser> = {
 };
 export const browserDemoProfiles = Object.values(profiles).map(({role,email}) => ({role,email}));
 const storageKey = "cuidali.demo.v1";
+const listeners = new Set<() => void>();
 const now = () => new Date().toISOString().slice(0,19).replace("T"," ");
 const dateInSaoPaulo = (utc: string) => new Intl.DateTimeFormat("sv-SE",{
   timeZone:"America/Sao_Paulo",
@@ -93,6 +96,15 @@ function persist(state: DemoState) {
   } catch {
     // The demonstration continues in memory.
   }
+  listeners.forEach(listener=>listener());
+}
+export function subscribeDemo(listener: () => void) {
+  listeners.add(listener);
+  return ()=>{listeners.delete(listener);};
+}
+export function guidedStep() {
+  const state=load();
+  return state?.role ? state.guide ?? null : null;
 }
 export function isBrowserDemo(): boolean {
   return Boolean(load()?.role);
@@ -102,13 +114,36 @@ export function startBrowserDemo(email: string): User {
   if (!profile) throw new Error("Escolha um dos perfis de demonstração.");
   const state = current = load() ?? seed();
   state.role = profile.role;
+  delete state.guide;
   persist(state);
   return state.users[profile.role];
+}
+export function startGuidedDemo(): User {
+  const state=current=seed();
+  state.role="elder";
+  state.guide="dose";
+  state.alerts=[];
+  persist(state);
+  return state.users.elder;
+}
+export function switchDemoProfile(): User {
+  const state=load();
+  if (!state?.role) throw new Error("Abra um perfil de demonstração.");
+  state.role=state.role==="elder" ? "caregiver" : "elder";
+  if (state.guide==="switch-caregiver") state.guide="accept";
+  if (state.guide==="switch-elder") state.guide="done";
+  persist(state);
+  return state.users[state.role];
+}
+export function linkedDemoElder() {
+  const state=load();
+  return state?.linked ? state.users.elder.id : 0;
 }
 export function endBrowserDemo() {
   const state = load();
   if (state) {
     state.role = null;
+    delete state.guide;
     persist(state);
   }
 }
@@ -132,6 +167,7 @@ function dashboard(state: DemoState) {
     }))).sort((a,b)=>a.time.localeCompare(b.time));
   return {
     date,elder:state.users.elder,last_activity:state.lastActivity,doses,
+    alerts:state.alerts,
     appointments:state.appointments.filter(item=>!item.cancelled && dateInSaoPaulo(item.scheduled_at)===date),
     dose_history:state.doses,
   };
@@ -292,11 +328,16 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
       const record: Dose = {...dose,id:previous?.id ?? state.nextId++,dose_date:date,status,recorded_at:now()};
       if (previous) Object.assign(previous,record);
       else state.doses.unshift(record);
+      state.lastActivity={created_at:record.recorded_at};
+      if (state.guide==="dose" && status==="taken") state.guide="request";
       return {message:"Dose registrada."};
     }
     case "sos":
       if (role==="elder" && method==="POST") {
-        state.alerts.unshift({id:state.nextId++,kind:"sos",status:"open",created_at:now()});
+        const created_at=now();
+        state.alerts.unshift({id:state.nextId++,kind:"sos",status:"open",created_at});
+        state.lastActivity={created_at};
+        if (state.guide==="request") state.guide="switch-caregiver";
         return {message:"Pedido registrado na demonstração."};
       }
       break;
@@ -308,6 +349,7 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
         alert.status=data.status==="resolved" ? "resolved" : "accepted";
         alert.accepted_name=user.name;
       }
+      if (state.guide==="accept" && alert.kind==="sos") state.guide="switch-elder";
       return {message:alert.status==="resolved" ? "Alerta concluído." : "Você assumiu o acompanhamento."};
     }
     case "pains":

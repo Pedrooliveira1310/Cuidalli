@@ -47,3 +47,20 @@ A ativação da biometria e a entrada na mesma conta após reabrir o aplicativo 
 - Página inicial com cabeçalho de marca, resumo do dia, progresso real das doses e cartões com ícone, horário e estado.
 - Lembretes em uma coluna no celular e duas em telas maiores; menu de cuidados organizado por rotina e conta; navegação com ícones consistentes e destaque da aba selecionada.
 - Prévia conferida em 320, 390 e 1280 pixels; os ícones web foram carregados e tiveram dimensões verificadas.
+
+## Roteiro da banca — cerca de 90 segundos
+
+1. **0–15 s · O problema.** Apresente o Cuidali como uma forma de manter a autonomia da pessoa idosa e compartilhar o acompanhamento com alguém de confiança. Abra o [site](https://cuidali-production.up.railway.app/) no Safari ou no navegador do computador.
+2. **15–35 s · A rotina de Maria.** Toque em **Testar demonstração**. Mostre uma de duas doses confirmadas, confirme a dose restante e mostre a barra completa.
+3. **35–65 s · O pedido e a resposta.** Use o SOS de exemplo e toque em **Ver como Ana**. Mostre que a confirmação aparece no painel dela, abra **Alertas** e assuma o pedido.
+4. **65–90 s · O que mudou.** Volte para Maria e aponte o nome de Ana no pedido. Mostre o resumo do cuidador se houver tempo.
+
+O roteiro usa dados fictícios da mesma aba. O teste automatizado da visita guiada verifica o progresso das doses, a troca de perfil, a retomada após recarregar e o nome da cuidadora na resposta de SOS. O fluxo com API e banco de teste está em `mobile/tests/flows.spec.ts`.
+
+Para o ensaio em dois aparelhos, use contas fictícias vinculadas num ambiente de teste com API compartilhada. Para o teste de usabilidade, peça a uma pessoa idosa que encontre e confirme uma dose e a um cuidador que encontre e assuma o alerta. Registre o tempo, se houve ajuda e onde cada pessoa hesitou. Esses resultados dependem das sessões com participantes.
+
+### Imagem da abertura
+
+A foto ilustrativa foi gerada no ImageGen integrado e otimizada para a web em `mobile/assets/brand/cuidado-em-familia.jpg`.
+
+> Use case: photorealistic-natural. Asset type: photo for the opening of Cuidali, a Brazilian family-care web app. Landscape 4:3 editorial photograph of a Brazilian woman in her early seventies and her adult daughter in her forties at a dining table in an understated Brazilian home. The older woman is holding and using her own smartphone while the daughter sits beside her and looks naturally at the same screen; both are relaxed, quietly smiling, with the older woman taking the lead. Morning window light, candid warm atmosphere, restrained blue and cream clothing, soft greenery and a clear uncluttered background. Medium shot, frame both faces and the phone near the middle so the photograph also crops well in a wide mobile strip. Realistic hands and age texture. No writing, interface overlays, readable screen, logos, medical setting, or watermark.

@@ -1,7 +1,9 @@
 import {AppIcon,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
 import {CareDrawer,CareSidebar,CareTabs,MenuToggle} from "./src/CareNavigation";
 import {AccountProfile,PasswordRecovery,LegalInformation} from "./src/AccountScreens";
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import {DemoGuide} from "./src/DemoGuide";
+import {Welcome} from "./src/Welcome";
+import React, { useEffect, useState, useCallback, useRef, useSyncExternalStore } from "react";
 import {
   AppState,
   useWindowDimensions,
@@ -48,7 +50,10 @@ import {
 } from "./src/ui";
 import { speak, listen, calendar } from "./src/device";
 import { openDialer } from "./src/phone";
-import { browserDemoProfiles, endBrowserDemo, isBrowserDemo, startBrowserDemo } from "./src/demo";
+import {
+  browserDemoProfiles, endBrowserDemo, guidedStep, isBrowserDemo, linkedDemoElder,
+  startBrowserDemo, startGuidedDemo, subscribeDemo, switchDemoProfile,
+} from "./src/demo";
 
 function callContact(phone: string) {
   return isBrowserDemo() ? Promise.resolve("Ligação simulada na demonstração.") : openDialer(phone);
@@ -228,7 +233,11 @@ function Loading({ state, refresh=true }: { state: ReturnType<typeof useData>;re
 }
 type DemoProfile = {email: string; role: User["role"]};
 
-function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => void;onScreenChange:()=>void;showBrand:boolean }) {
+function Auth({onLogin,onScreenChange,wide}:{
+  onLogin:(user:User)=>void;
+  onScreenChange:()=>void;
+  wide:boolean;
+}) {
   useEffect(()=>{if(Platform.OS!=="web")return;const handler=async(e:Event)=>{const value=(e as CustomEvent).detail;if(!value.token){setMessage(value.message);return;}try{await saveToken(value.token);const r=await api("/me");onLogin(r.user);}catch(error){setMessage((error as Error).message);}};window.addEventListener("cuidali-biometric",handler);return()=>window.removeEventListener("cuidali-biometric",handler);},[]);
   const [recovery,setRecovery]=useState(false),[legal,setLegal]=useState<"terms"|"privacy"|null>(null);
   const [role, setRole] = useState<"elder" | "caregiver">("elder"),
@@ -266,11 +275,24 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
       setOpeningDemo("");
     }
   }
-  if(recovery)return <PasswordRecovery onBack={()=>setRecovery(false)} />;
-  if(legal)return <LegalInformation kind={legal} onBack={()=>setLegal(null)} />;
-  return (
+  const landing = stage==="profile" && demoProfiles.length>0 && !recovery && !legal;
+  if (recovery || legal) {
+    return <View style={[s.card,{width:"100%",maxWidth:560,alignSelf:"center"}]}>
+      {recovery ? <PasswordRecovery onBack={()=>setRecovery(false)}/> :
+        legal && <LegalInformation kind={legal} onBack={()=>setLegal(null)}/>}
+    </View>;
+  }
+  const content = (
     <>
-      {showBrand && <BrandHeader large />}
+      {landing ? <Welcome wide={wide} busy={!!openingDemo}
+        onDemo={()=>onLogin(startGuidedDemo())}
+        onLogin={()=>setStage("login")}
+        onRegister={()=>{
+          const section=document.getElementById("cuidali-criar-conta");
+          section?.scrollIntoView({block:"start"});
+          section?.querySelector<HTMLElement>('[role="radio"]')?.focus({preventScroll:true});
+        }}/> :
+        !wide && <BrandHeader large />}
       {!!message && (
         <Text accessibilityRole="alert" style={s.success}>
           {message}
@@ -279,14 +301,10 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
       {stage !== "profile" && <BackButton onPress={()=>{setMessage("");setStage("profile");}} />}
       {stage === "profile" ? (
         <>
-          <Text style={s.title}>Como você vai usar o Cuidali?</Text>
-          <Text style={s.text}>
-            Escolha uma opção para configurarmos o app do jeito certo.
-          </Text>
           {!!demoProfiles.length && (
             <Card tone="blue">
               <Text accessibilityRole="header" style={s.subtitle}>Demonstração</Text>
-              <Text style={s.muted}>Explore o Cuidali com dados fictícios.</Text>
+              <Text style={s.muted}>Explore livremente com os dois perfis de exemplo.</Text>
               <View style={s.row}>
                 {demoProfiles.map(profile => {
                   const label = profile.role === "elder" ? "Pessoa idosa" : "Cuidador";
@@ -314,15 +332,20 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
               {!!demoError && <Text accessibilityRole="alert" style={s.error}>{demoError}</Text>}
             </Card>
           )}
+          <View nativeID="cuidali-criar-conta" style={[{gap:16},landing&&s.card]}>
+          <Text accessibilityRole="header" style={s.title}>Como você vai usar o Cuidali?</Text>
+          <View style={wide&&landing?[s.row,{alignItems:"stretch"}]:{gap:12}}>
           {(["elder", "caregiver"] as const).map((r) => (
             <Pressable
               key={r}
               accessibilityRole="radio"
               disabled={!!openingDemo}
+              aria-checked={role===r}
               accessibilityState={{ checked: role === r }}
               onPress={() => setRole(r)}
               style={({pressed}) => [
                 s.card,
+                wide&&landing&&{flex:1,minWidth:240},
                 pressed && { backgroundColor: colors.light },
                 role === r && {
                   backgroundColor: colors.light,
@@ -338,13 +361,15 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
               </View>
             </Pressable>
           ))}
+          </View>
           <Button label="Continuar" disabled={!!openingDemo} onPress={() => setStage("register")} />
-          <Button
+          {!landing&&<Button
             label="Já tenho conta · Entrar"
             tone="light"
             disabled={!!openingDemo}
             onPress={() => setStage("login")}
-          />
+          />}
+          </View>
         </>
       ) : stage === "register" ? (
         <>
@@ -436,6 +461,14 @@ function Auth({ onLogin,onScreenChange,showBrand }: { onLogin: (user: User) => v
       <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:16,paddingVertical:12}}>{(["terms","privacy"] as const).map(kind=><Pressable key={kind} accessibilityRole="button" disabled={!!openingDemo} onPress={()=>setLegal(kind)} style={{minHeight:48,justifyContent:"center"}}><Text style={{fontSize:16,color:colors.blue,textDecorationLine:"underline"}}>{kind==="terms"?"Termos de Uso":"Política de Privacidade"}</Text></Pressable>)}</View>
     </>
   );
+  if (landing) return <View style={{width:"100%",gap:16}}>{content}</View>;
+  return (
+    <View style={{width:"100%",maxWidth:wide?1040:560,alignSelf:"center",
+      flexDirection:wide?"row":"column",alignItems:wide?"flex-start":"stretch",gap:20,marginTop:wide?32:0}}>
+      {wide&&<AuthBrandPanel/>}
+      <View style={[s.card,{flex:wide?1:undefined,minWidth:0,padding:wide?32:16,gap:16}]}>{content}</View>
+    </View>
+  );
 }
 function Home({
   elder,
@@ -453,6 +486,9 @@ function Home({
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const caregiver = user.role === "caregiver";
+  const pendingAlerts = state.data?.alerts?.filter((alert:CareAlert)=>alert.status==="open").length ?? 0;
+  const appointmentsToday = state.data?.appointments.length ?? 0;
+  const firstUnconfirmed = state.data?.doses.find((dose:{status:string})=>dose.status!=="taken");
   async function checkIn() {
     if (busy) return;
     setBusy(true);
@@ -501,13 +537,24 @@ function Home({
       {state.data && (
         <>
           {caregiver && (
-            <Text style={s.muted}>
-              {state.data.last_activity
-                ? `Última atividade do idoso: ${dateTime(state.data.last_activity.created_at)}`
-                : "Ainda não há atividade registrada pelo idoso."}
-            </Text>
+            <Card>
+              <Text accessibilityRole="header" style={s.subtitle}>Acompanhamento de hoje</Text>
+              <Text style={s.muted}>
+                {state.data.last_activity
+                  ? `Última atividade do idoso: ${dateTime(state.data.last_activity.created_at)}`
+                  : "Ainda não há atividade registrada pelo idoso."}
+              </Text>
+              <View style={[s.row,{alignItems:"stretch"}]}>
+                <MenuTile label={pendingAlerts===1?"1 alerta aguardando":pendingAlerts+" alertas aguardando"}
+                  actionLabel="Ver alertas do cuidado" subtitle="Ver pedidos e respostas"
+                  icon="bell" warm={pendingAlerts>0} onPress={()=>navigate("Alertas")}/>
+                <MenuTile label={appointmentsToday===1?"1 consulta hoje":appointmentsToday+" consultas hoje"}
+                  actionLabel="Abrir agenda de cuidados" subtitle="Ver agenda da pessoa idosa"
+                  icon="calendar" onPress={()=>navigate("Consultas")}/>
+              </View>
+            </Card>
           )}
-          {user.role === "caregiver" && <Alerts elder={elder} caregiver />}
+          {user.role === "caregiver" && <Alerts elder={elder} caregiver onUpdated={state.reload} />}
           {user.role === "caregiver" && <Card><Text style={s.subtitle}>Acompanhamento de atividade</Text><Form fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]} submit="Salvar acompanhamento" onSave={async v=>{await api(`/elders/${elder}/settings`,"PATCH",{inactivity_hours:Number(v.inactivity_hours)});setMessage("Acompanhamento atualizado.");state.reload();}} /></Card>}
           {!caregiver && (
             <MenuRow label="Estou bem hoje" icon="heart"
@@ -518,7 +565,8 @@ function Home({
             <Card><Text style={s.text}>Nenhuma dose prevista para hoje.</Text></Card>
           )}
           {!!state.data.doses.length && <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>{state.data.doses.map((d: any) => (
-            <View key={d.time_id} style={{flexGrow:1,flexBasis:wide?"46%":"100%",minWidth:0}}><Card>
+            <View key={d.time_id} nativeID={d.time_id===firstUnconfirmed?.time_id?"cuidali-dose-pendente":undefined}
+              style={{flexGrow:1,flexBasis:wide?"46%":"100%",minWidth:0}}><Card>
               <View style={{flexDirection:'row',alignItems:'center',gap:14}}>
                 <View style={{width:52,height:52,borderRadius:15,backgroundColor:colors.light,alignItems:'center',justifyContent:'center'}}>
                   <Image source={require("./assets/prototype/pills.png")} style={{width:35,height:35}} resizeMode="contain" />
@@ -1371,7 +1419,7 @@ const alertFilters = [
   {status:"accepted",label:"Em acompanhamento"},
   {status:"resolved",label:"Concluídos"},
 ] as const;
-function Alerts({elder,caregiver,showFilters=false}:{elder:number;caregiver:boolean;showFilters?:boolean}) {
+function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;caregiver:boolean;showFilters?:boolean;onUpdated?:()=>void}) {
   const state=useData(`/elders/${elder}/alerts`),[message,setMessage]=useState("");
   const [filter,setFilter]=useState<AlertStatus|"all">("all");
   const items: CareAlert[] = state.data?.items ?? [];
@@ -1379,7 +1427,7 @@ function Alerts({elder,caregiver,showFilters=false}:{elder:number;caregiver:bool
   const visible = showFilters ? filtered : filtered.slice(0,15);
   useEffect(()=>{const t=setInterval(state.reload,15000);return ()=>clearInterval(t);},[state.reload]);
   const names:Record<string,string>={sos:"Pedido de ajuda",inactivity:"Ausência de atividade",pain:"Novo registro de dor"};
-  async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();}catch(e){setMessage((e as Error).message);}}
+  async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();onUpdated?.();}catch(e){setMessage((e as Error).message);}}
   return <><Text accessibilityRole="header" style={showFilters?s.title:s.subtitle}>Alertas e acompanhamento</Text>{!!state.error&&<Text style={s.error}>{state.error}</Text>}
     {showFilters&&state.data&&(
       <View style={[s.row,{gap:8}]} accessibilityLabel="Filtrar alertas por status">
@@ -1528,6 +1576,7 @@ export default function App() {
   const currentTab = useRef("Início");
   const caregiver = user?.role === "caregiver";
   const demo = !!user && isBrowserDemo();
+  const step = useSyncExternalStore(subscribeDemo,guidedStep,()=>null);
   useEffect(() => {
     if (desktop || !user) setDrawerOpen(false);
   }, [desktop,user?.id]);
@@ -1546,12 +1595,20 @@ export default function App() {
   }
   function goBack(){const previous=navigationHistory.current.pop() || "Início";currentTab.current=previous;setTabState(previous);}
   const sessionGeneration = useRef(0);
-  function loggedIn(u: User) {
+  function loggedIn(u: User, openDemoCare=false) {
+    const demoStep=guidedStep();
+    const demoElder=u.role==="caregiver" && (openDemoCare || demoStep==="accept" || demoStep==="switch-elder")
+      ? linkedDemoElder() : 0;
     sessionGeneration.current++;
     setUser(u);
-    setElder(u.role === "elder" ? Number(u.id) : 0);
+    setElder(u.role==="elder" ? Number(u.id) : demoElder);
+    setDrawerOpen(false);
     navigationHistory.current = [];
-    currentTab.current = u.role === "elder" ? "Início" : "Vínculos";
+    if (u.role==="elder") {
+      currentTab.current=demoStep==="request" || demoStep==="switch-caregiver" || demoStep==="done" ? "SOS" : "Início";
+    } else {
+      currentTab.current=demoElder ? (demoStep==="switch-elder" ? "Alertas" : "Início") : "Vínculos";
+    }
     setTabState(currentTab.current);
     setSessionMessage("");
   }
@@ -1620,7 +1677,7 @@ export default function App() {
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   useEffect(() => {
     scroll.current?.scrollTo({ y: 0, animated: false });
-  }, [tab, elder]);
+  }, [tab, elder, step]);
   useEffect(() => {
     const handler = BackHandler.addEventListener("hardwareBackPress", () => {
       if (
@@ -1740,7 +1797,7 @@ export default function App() {
           <ScrollView
             ref={scroll}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={[s.content, desktop && {padding:32,paddingTop:28}]}
+            contentContainerStyle={[s.content, desktop && {padding:32,paddingTop:28,maxWidth:user?1120:1240}]}
           >
             {!!sessionMessage && (
               <Text accessibilityRole="alert" style={s.error}>
@@ -1757,31 +1814,40 @@ export default function App() {
                 {demo && (
                   <View style={[s.row,{justifyContent:"space-between",backgroundColor:colors.light,
                     borderRadius:12,paddingLeft:12,paddingRight:6}]}>
-                    <Text style={[s.muted,{fontWeight:"700"}]}>Dados de demonstração</Text>
-                    <Pressable accessibilityRole="button" onPress={logout}
+                    <Text style={[s.muted,{fontWeight:"700",fontSize:14}]}>Dados de demonstração</Text>
+                    {!step&&<Pressable accessibilityRole="button"
+                      onPress={()=>loggedIn(switchDemoProfile(),true)}
                       style={{minHeight:48,justifyContent:"center",paddingHorizontal:8}}>
-                      <Text style={[s.muted,{color:colors.blue,textDecorationLine:"underline"}]}>Sair da demonstração</Text>
+                      <Text style={[s.muted,{color:colors.blue,textDecorationLine:"underline"}]}>
+                        {caregiver?"Ver como pessoa idosa":"Ver como cuidador"}
+                      </Text>
+                    </Pressable>}
+                    <Pressable accessibilityRole="button" onPress={logout}
+                      style={{minHeight:44,justifyContent:"center",paddingHorizontal:8}}>
+                      <Text style={[s.muted,{fontSize:14,color:colors.blue,textDecorationLine:"underline"}]}>Sair da demonstração</Text>
                     </Pressable>
                   </View>
                 )}
+                {demo&&step&&<DemoGuide step={step} screen={tab} onNavigate={setTab}
+                  onFindDose={()=>{
+                    const dose=document.getElementById("cuidali-dose-pendente");
+                    dose?.scrollIntoView({block:"center"});
+                    dose?.querySelector<HTMLElement>('[aria-label="✓ Já tomei"]')?.focus({preventScroll:true});
+                  }}
+                  onSwitch={()=>loggedIn(switchDemoProfile(),true)}
+                  onRestart={()=>loggedIn(startGuidedDemo())}/>}
                 {caregiver && tab !== "Vínculos" && (
                   <View style={{alignSelf:desktop?"flex-end":"stretch"}}>
                     <Button label="Selecionar outro idoso · Vínculos" tone="light" onPress={() => setTab("Vínculos")} />
                   </View>
                 )}
                 {!["Início","Termos de Uso","Política de Privacidade"].includes(tab) && <BackButton onPress={goBack} />}
-                <Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />
+                {!step&&<Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />}
                 {screen}
               </>
             ) : (
               <>
-                <View style={{width:"100%",maxWidth:desktop?1040:560,alignSelf:"center",
-                  flexDirection:desktop?"row":"column",alignItems:desktop?"flex-start":"stretch",gap:20,marginTop:desktop?32:0}}>
-                  {desktop && <AuthBrandPanel/>}
-                  <View style={[s.card,{flex:desktop?1:undefined,minWidth:0,padding:desktop?32:16,gap:16}]}>
-                    <Auth showBrand={!desktop} onLogin={loggedIn} onScreenChange={()=>scroll.current?.scrollTo({y:0,animated:false})} />
-                  </View>
-                </View>
+                <Auth wide={desktop} onLogin={loggedIn} onScreenChange={()=>scroll.current?.scrollTo({y:0,animated:false})} />
                 {Platform.OS !== "web" && !androidWebPackage && <Button label="Configurar servidor" tone="light" onPress={() => setSetup(true)} />}
               </>
             )}

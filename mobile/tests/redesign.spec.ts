@@ -1,6 +1,43 @@
 import {test,expect} from '@playwright/test';
 const base=process.env.E2E_API_URL||'http://127.0.0.1:8010';
 
+test('visita guiada passa pela dose e pelo aceite do SOS nos dois perfis',async({page})=>{
+ await page.route('**/auth/demo',route=>route.fulfill({json:{items:[]}}));
+ await page.goto('/');
+ await expect(page.getByRole('heading',{name:'Cuidar de perto, mesmo à distância.',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Criar conta',exact:true}).click();
+ await expect(page.getByRole('radio',{name:/Sou o idoso/})).toBeFocused();
+ const writes:string[]=[];
+ page.on('request',request=>{
+   if(request.url().startsWith(base)&&request.method()!=='GET') writes.push(request.url());
+ });
+ await page.getByRole('button',{name:'Testar demonstração',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Confirme uma dose',exact:true})).toBeVisible();
+ const progress=page.getByRole('progressbar',{name:'Doses confirmadas'});
+ await expect(progress).toHaveAttribute('aria-valuenow','1');
+ await page.getByRole('button',{name:'Ir para a dose',exact:true}).click();
+ await expect(page.getByRole('button',{name:'✓ Já tomei',exact:true})).toBeFocused();
+ await page.getByRole('button',{name:'✓ Já tomei',exact:true}).click();
+ await expect(progress).toHaveAttribute('aria-valuenow','2');
+ await page.getByRole('button',{name:'Abrir SOS de exemplo',exact:true}).click();
+ page.once('dialog',dialog=>dialog.accept());
+ await page.getByRole('button',{name:'SOS: pedir ajuda a Ana Silva',exact:true}).click();
+ await page.reload();
+ await page.getByRole('button',{name:'Ver como Ana',exact:true}).click();
+ await expect(progress).toHaveAttribute('aria-valuenow','2');
+ await expect(page.getByRole('heading',{name:'Acompanhamento de hoje',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Ver alertas da demonstração',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'Alertas',exact:true})).toHaveAttribute('aria-selected','true');
+ await expect(page.getByText('Pedido de ajuda',{exact:true})).toHaveCount(1);
+ await page.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
+ await page.getByRole('button',{name:'Voltar para Maria',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Maria já consegue ver a resposta',exact:true})).toBeVisible();
+ await expect(page.getByText('Acompanhado por Ana Silva',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Recomeçar demonstração',exact:true}).click();
+ await expect(progress).toHaveAttribute('aria-valuenow','1');
+ expect(writes).toEqual([]);
+});
+
 test('a demonstração web preserva os dois perfis no navegador sem usar a API de contas', async ({page,browser})=>{
  const origin = process.env.E2E_WEB_URL || 'http://localhost:8081';
  await page.route('**/auth/demo',route=>route.fulfill({json:{items:[]}}));
