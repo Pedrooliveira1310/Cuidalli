@@ -1,4 +1,5 @@
 import {AppIcon,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
+import {CareDrawer,CareSidebar,CareTabs,MenuToggle} from "./src/CareNavigation";
 import {AccountProfile,PasswordRecovery,LegalInformation} from "./src/AccountScreens";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
@@ -1362,14 +1363,45 @@ function SOS({
     </>
   );
 }
-function Alerts({elder,caregiver}:{elder:number;caregiver:boolean}) {
+type AlertStatus = "open" | "accepted" | "resolved";
+type CareAlert = {id:number;kind:string;status:AlertStatus;created_at:string;accepted_name?:string};
+const alertFilters = [
+  {status:"all",label:"Todos"},
+  {status:"open",label:"Aguardando"},
+  {status:"accepted",label:"Em acompanhamento"},
+  {status:"resolved",label:"Concluídos"},
+] as const;
+function Alerts({elder,caregiver,showFilters=false}:{elder:number;caregiver:boolean;showFilters?:boolean}) {
   const state=useData(`/elders/${elder}/alerts`),[message,setMessage]=useState("");
+  const [filter,setFilter]=useState<AlertStatus|"all">("all");
+  const items: CareAlert[] = state.data?.items ?? [];
+  const filtered = filter==="all" ? items : items.filter(item=>item.status===filter);
+  const visible = showFilters ? filtered : filtered.slice(0,15);
   useEffect(()=>{const t=setInterval(state.reload,15000);return ()=>clearInterval(t);},[state.reload]);
   const names:Record<string,string>={sos:"Pedido de ajuda",inactivity:"Ausência de atividade",pain:"Novo registro de dor"};
   async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();}catch(e){setMessage((e as Error).message);}}
-  return <><Text style={s.subtitle}>Alertas e acompanhamento</Text>{!!state.error&&<Text style={s.error}>{state.error}</Text>}
-    {state.data?.items.length===0&&<Text style={s.text}>Nenhum alerta registrado.</Text>}
-    {state.data?.items.slice(0,15).map((a:any)=><Card key={a.id} tone={a.status==='open'?'yellow':undefined}>
+  return <><Text accessibilityRole="header" style={showFilters?s.title:s.subtitle}>Alertas e acompanhamento</Text>{!!state.error&&<Text style={s.error}>{state.error}</Text>}
+    {showFilters&&state.data&&(
+      <View style={[s.row,{gap:8}]} accessibilityLabel="Filtrar alertas por status">
+        {alertFilters.map(option=>{
+          const count=option.status==="all"?items.length:items.filter(item=>item.status===option.status).length;
+          const selected=filter===option.status;
+          return <Pressable key={option.status} accessibilityRole="button" aria-pressed={selected}
+            onPress={()=>setFilter(option.status)}
+            style={({pressed,hovered}:{pressed:boolean;hovered?:boolean})=>({
+              minHeight:48,paddingHorizontal:12,paddingVertical:9,borderRadius:12,justifyContent:"center",
+              borderWidth:1,borderColor:selected?"#225BA5":"#D8E4F1",
+              backgroundColor:selected?"#225BA5":pressed||hovered?colors.light:"#FFF",
+            })}>
+            <Text style={{fontSize:16,lineHeight:22,fontWeight:"700",color:selected?"#FFF":colors.dark}}>
+              {option.label} ({count})
+            </Text>
+          </Pressable>;
+        })}
+      </View>
+    )}
+    {state.data&&!filtered.length&&<Text style={s.text}>{filter==="all"?"Nenhum alerta registrado.":"Nenhum alerta com esse status."}</Text>}
+    {visible.map(a=><Card key={a.id} tone={a.status==='open'?'yellow':undefined}>
       <Text style={s.subtitle}>{names[a.kind]}</Text>
       <View style={s.row}>
         <Text style={s.muted}>{dateTime(a.created_at)}</Text>
@@ -1479,6 +1511,12 @@ export default function App() {
   const {width} = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 980;
   const [setup, setSetup] = useState(false);
+  const [drawerOpen,setDrawerOpen] = useState(false);
+  const [railCollapsed,setRailCollapsed] = useState(()=>{
+    if (Platform.OS!=="web") return false;
+    try { return window.localStorage.getItem("cuidali.menu.recolhido")==="1"; }
+    catch { return false; }
+  });
   const [doseRevision, setDoseRevision] = useState(0);
   const [user, setUser] = useState<User | null>(null),
     [starting, setStarting] = useState(true),
@@ -1490,6 +1528,14 @@ export default function App() {
   const currentTab = useRef("Início");
   const caregiver = user?.role === "caregiver";
   const demo = !!user && isBrowserDemo();
+  useEffect(() => {
+    if (desktop || !user) setDrawerOpen(false);
+  }, [desktop,user?.id]);
+  useEffect(() => {
+    if (!desktop) return;
+    try { window.localStorage.setItem("cuidali.menu.recolhido",railCollapsed?"1":"0"); }
+    catch { /* The layout still works without browser storage. */ }
+  }, [desktop,railCollapsed]);
   function setTab(next:string) {
     const destination = caregiver && next === "SOS" ? "Alertas" : next;
     if (destination !== currentTab.current) {
@@ -1590,13 +1636,6 @@ export default function App() {
     return () => handler.remove();
   }, [tab]);
 
-  const tabs = [
-    {screen:"Início",label:"Início",icon:"home"},
-    {screen:"Assistente",label:"Assistente",icon:"chat"},
-    caregiver ? {screen:"Alertas",label:"Alertas",icon:"bell"} : {screen:"SOS",label:"SOS",icon:"help"},
-    {screen:"Cuidados",label:caregiver?"Cuidados":"Idoso",icon:"grid"},
-  ];
-  const navigationActive=(name:string)=>tab===name||(name==="Cuidados"&&["Medicamentos","Consultas","Contatos","Dores","Vínculos","Meus dados","Termos de Uso","Política de Privacidade"].includes(tab));
   let screen: React.ReactNode = null;
   if (user) {
     if (tab === "Vínculos")
@@ -1654,7 +1693,7 @@ export default function App() {
     else if (tab === "SOS" && !caregiver)
       screen = <SOS key={elder} elder={elder} navigate={setTab} />;
     else if (tab === "Alertas" && caregiver)
-      screen = <Alerts key={elder} elder={elder} caregiver />;
+      screen = <Alerts key={elder} elder={elder} caregiver showFilters />;
     else if (tab === "Dores")
       screen = <Pains key={elder} elder={elder} user={user} />;
     else
@@ -1673,58 +1712,31 @@ export default function App() {
         />
       );
   }
-  const navigation = (
-    <View accessibilityRole="tablist" accessibilityLabel="Navegação principal" style={{
-      flexDirection:desktop?"column":"row",gap:4,padding:desktop?0:5,
-      backgroundColor:"#FFF",borderTopWidth:desktop?0:1,borderColor:"#DAE4F0",
-    }}>
-      {tabs.map(item => {
-        const active = navigationActive(item.screen);
-        const emergency = item.screen === "SOS";
-        const ink = emergency ? colors.red : active ? colors.blue : colors.dark;
-        return (
-          <Pressable key={item.screen} accessibilityRole="tab" accessibilityState={{selected:active}}
-            aria-selected={active} accessibilityLabel={item.label} onPress={() => setTab(item.screen)}
-            style={({pressed,hovered}:{pressed:boolean;hovered?:boolean})=>({
-              flex:desktop?undefined:1, minWidth:0,minHeight:desktop?54:59,
-              flexDirection:desktop?"row":"column", alignItems:"center",justifyContent:desktop?"flex-start":"center",
-              gap:desktop?12:4,paddingHorizontal:desktop?14:2,borderRadius:13,
-              backgroundColor:emergency?(active||pressed||hovered?"#FDE5E7":"#FFF5F5"):active||pressed||hovered?colors.light:"transparent",
-            })}>
-            <AppIcon name={item.icon} size={23} color={ink}/>
-            <Text style={{fontSize:desktop?17:14,color:ink,fontWeight:active||emergency?"700":"500"}}>{item.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
   return (
     <SafeAreaProvider>
       <SafeAreaView style={s.page}>
         <StatusBar style="dark" />
-        <View style={{flex:1,flexDirection:desktop?"row":"column"}}>
+        <View aria-hidden={drawerOpen&&!desktop}
+          importantForAccessibility={drawerOpen&&!desktop?"no-hide-descendants":"auto"}
+          style={{flex:1,flexDirection:desktop?"row":"column"}}>
         {user && desktop && (
-          <View style={{width:232,backgroundColor:"#FFF",borderRightWidth:1,borderColor:"#DAE4F0",
-            paddingHorizontal:16,paddingVertical:20,gap:25}}>
-            <BrandHeader/>
-            {navigation}
-            <View style={{flex:1}}/>
-            <Pressable accessibilityRole="button" accessibilityLabel="Abrir meus dados" onPress={()=>setTab("Meus dados")}
-              style={({pressed})=>({flexDirection:"row",alignItems:"center",padding:12,minHeight:62,gap:10,
-                borderRadius:14,backgroundColor:pressed?colors.light:"#F3F7FC"})}>
-              <AppIcon name="person" size={22}/>
-              <View style={{flex:1,minWidth:0}}>
-                <Text style={[s.muted,{color:colors.dark,fontWeight:"700"}]}>Meus dados</Text>
-                <Text numberOfLines={1} style={s.muted}>{user.name}</Text>
-              </View>
-              <AppIcon name="chevron" size={16}/>
-            </Pressable>
-          </View>
+          <CareSidebar name={user.name} caregiver={caregiver} screen={tab} onNavigate={setTab}
+            collapsed={railCollapsed} onToggle={()=>setRailCollapsed(value=>!value)}/>
         )}
         <KeyboardAvoidingView
           style={{ flex: 1, minWidth:0 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
+          {user && !desktop && (
+            <View style={{flexDirection:"row",alignItems:"center",gap:10,paddingHorizontal:16,
+              borderBottomWidth:1,borderColor:"#DAE4F0",backgroundColor:"#FFF"}}>
+              <MenuToggle label="Abrir menu" icon="menu" expanded={drawerOpen} controls="cuidali-mobile-menu"
+                onPress={()=>setDrawerOpen(true)}/>
+              <View style={{flex:1,minWidth:0}}>
+                <BrandHeader name={user.name} compact onProfile={()=>setTab("Meus dados")}/>
+              </View>
+            </View>
+          )}
           <ScrollView
             ref={scroll}
             keyboardShouldPersistTaps="handled"
@@ -1742,7 +1754,6 @@ export default function App() {
                 onCancel={getServer() ? () => setSetup(false) : undefined} />
             ) : user ? (
               <>
-                {!desktop && <BrandHeader name={user.name} onProfile={()=>setTab("Meus dados")} />}
                 {demo && (
                   <View style={[s.row,{justifyContent:"space-between",backgroundColor:colors.light,
                     borderRadius:12,paddingLeft:12,paddingRight:6}]}>
@@ -1776,8 +1787,13 @@ export default function App() {
             )}
           </ScrollView>
         </KeyboardAvoidingView>
-        {user && !desktop && navigation}
+        {user && !desktop && <CareTabs caregiver={caregiver} screen={tab} onNavigate={setTab}/>}
         </View>
+        {user && !desktop && (
+          <CareDrawer name={user.name} caregiver={caregiver} screen={tab} visible={drawerOpen}
+            onToggle={()=>setDrawerOpen(false)}
+            onNavigate={next=>{setDrawerOpen(false);setTab(next);}}/>
+        )}
       </SafeAreaView>
     </SafeAreaProvider>
   );

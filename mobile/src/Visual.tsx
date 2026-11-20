@@ -18,15 +18,26 @@ const paths:Record<string,string>={
  bell:'M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9m-8 12a2 2 0 0 0 4 0',
  grid:'M3 3h7v7H3Zm11 0h7v7h-7ZM3 14h7v7H3Zm11 0h7v7h-7Z',
  heart:'M20.8 4.8a5.5 5.5 0 0 0-7.8 0L12 5.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l8.9 8.9 8.8-8.9a5.5 5.5 0 0 0 0-7.8Z',
+ menu:'M4 6h16M4 12h16M4 18h16',
+ sidebar:'M3 4h18v16H3ZM9 4v16',
+ close:'M6 6l12 12M18 6 6 18',
+ down:'m5 9 7 7 7-7',
+ up:'m5 15 7-7 7 7',
 };
 export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:number;color?:string}){
  if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
- return <Text style={{fontSize:size,color}}>{name==='check'?'✓':name==='help'?'!':name==='chevron'?'›':'+'}</Text>;
+ const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃'};
+ return <Text style={{fontSize:size,color}}>{fallback[name]??'+'}</Text>;
 }
-export function BrandHeader({onProfile,name,large=false}:{onProfile?:()=>void;name?:string;large?:boolean}){
+export function BrandMark({size=48}:{size?:number}){
+ return <View style={{width:size,height:size,borderRadius:Math.round(size/3),overflow:'hidden',backgroundColor:'#FFF',borderWidth:1,borderColor:'#E3EAF2'}}>
+  <Image source={require('../assets/brand/logo-mark.png')} accessibilityLabel="Logo Cuidali: cuidado entre gerações" style={{width:'100%',height:'100%'}} resizeMode="contain"/>
+ </View>;
+}
+export function BrandHeader({onProfile,name,large=false,compact=false}:{onProfile?:()=>void;name?:string;large?:boolean;compact?:boolean}){
  return <View style={{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:large?14:8,marginBottom:large?8:0}}>
-  <View style={{width:large?72:48,height:large?72:48,borderRadius:large?22:16,overflow:'hidden',backgroundColor:'#FFF',borderWidth:1,borderColor:'#E3EAF2'}}><Image source={require('../assets/brand/logo-mark.png')} accessibilityLabel="Logo Cuidali: cuidado entre gerações" style={{width:'100%',height:'100%'}} resizeMode="contain"/></View>
-  <View style={{flex:1}}><Text style={{fontSize:large?32:24,fontWeight:'800',color:colors.dark,letterSpacing:-.8}}>Cuidali</Text><Text style={{fontSize:15,color:'#4D6079',lineHeight:22}}>Cuidar é estar por perto.</Text></View>
+  <BrandMark size={large?72:compact?38:48}/>
+  <View style={{flex:1}}><Text style={{fontSize:large?32:24,fontWeight:'800',color:colors.dark,letterSpacing:-.8}}>Cuidali</Text>{!compact&&<Text style={{fontSize:15,color:'#4D6079',lineHeight:22}}>Cuidar é estar por perto.</Text>}</View>
   {onProfile&&<Pressable accessibilityRole="button" accessibilityLabel="Abrir meus dados" onPress={onProfile} style={{width:48,height:48,borderRadius:24,backgroundColor:'#DFEAF6',alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#C5D8ED'}}><Text style={{fontSize:20,fontWeight:'700',color:colors.blue}}>{(name||'C').slice(0,1).toUpperCase()}</Text></Pressable>}
  </View>;
 }

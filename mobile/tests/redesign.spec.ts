@@ -32,7 +32,10 @@ test('a demonstração web preserva os dois perfis no navegador sem usar a API d
  await expect(progress).toHaveAttribute('aria-valuenow','2');
  await expect(page.getByRole('tab',{name:'SOS',exact:true})).toHaveCount(0);
  await page.getByRole('tab',{name:'Alertas',exact:true}).click();
+ await page.getByRole('button',{name:'Aguardando (1)',exact:true}).click();
  await page.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
+ await expect(page.getByText('Nenhum alerta com esse status.',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Em acompanhamento (1)',exact:true}).click();
  await expect(page.getByText('Em acompanhamento',{exact:true})).toBeVisible();
  expect(realRequests).toEqual([]);
 
@@ -44,6 +47,45 @@ test('a demonstração web preserva os dois perfis no navegador sem usar a API d
    await untouched.getByRole('button',{name:/maria\.cuidali@example\.com/}).click();
    await expect(untouched.getByRole('progressbar',{name:'Doses confirmadas'})).toHaveAttribute('aria-valuenow','1');
  }finally{await separate.close();}
+});
+
+test('menu de cuidados no celular e barra recolhível no computador',async({page})=>{
+ await page.route('**/auth/demo',route=>route.fulfill({json:{items:[]}}));
+ await page.goto('/');
+ await page.getByRole('button',{name:/maria\.cuidali@example\.com/}).click();
+ const openMenu=page.getByRole('button',{name:'Abrir menu',exact:true});
+ const closeMenu=page.getByRole('button',{name:'Fechar menu',exact:true});
+ await openMenu.click();
+ await expect(closeMenu).toBeVisible();
+ await expect(page.locator('[aria-controls="cuidali-mobile-menu"]')).toHaveAttribute('aria-expanded','true');
+ const routine=page.getByRole('button',{name:'Rotina de cuidados',exact:true});
+ await routine.click();
+ await expect(routine).toHaveAttribute('aria-expanded','false');
+ await expect(page.getByRole('button',{name:'Ir para Consultas',exact:true})).toHaveCount(0);
+ await routine.click();
+ await page.getByRole('button',{name:'Ir para Consultas',exact:true}).click();
+ await expect(closeMenu).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Adicionar consulta',exact:true})).toBeVisible();
+ await expect(page.getByRole('tab',{name:'Idoso',exact:true})).toHaveAttribute('aria-selected','true');
+ await expect(page.getByRole('tab',{name:'SOS',exact:true})).toBeVisible();
+ await openMenu.click();
+ await expect(closeMenu).toBeVisible();
+ await page.keyboard.press('Escape');
+ await expect(closeMenu).toHaveCount(0);
+ await expect(openMenu).toHaveAttribute('aria-expanded','false');
+
+ await page.setViewportSize({width:1280,height:900});
+ const collapse=page.getByRole('button',{name:'Recolher menu',exact:true});
+ const expand=page.getByRole('button',{name:'Expandir menu',exact:true});
+ await collapse.click();
+ await expect(expand).toHaveAttribute('aria-expanded','false');
+ await expect(page.getByRole('tab',{name:'SOS',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Ir para Medicamentos',exact:true})).toHaveCount(0);
+ await page.reload();
+ await expand.click();
+ await expect(collapse).toHaveAttribute('aria-expanded','true');
+ await page.getByRole('button',{name:'Ir para Medicamentos',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Adicionar medicamento',exact:true})).toBeVisible();
 });
 
 test('entrada, recuperação e textos de privacidade são acessíveis',async({page})=>{
