@@ -1,4 +1,4 @@
-import { ElderLayout, ElderPages } from "./src/ElderPages";
+import { ElderLayout, ElderPages, ElderViewport } from "./src/ElderPages";
 import {AppIcon,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
 import {CareDrawer,CareSidebar,CareTabs,MenuToggle} from "./src/CareNavigation";
 import {AccountProfile,PasswordRecovery,LegalInformation} from "./src/AccountScreens";
@@ -19,6 +19,7 @@ import {
   Pressable,
   TextInput,
   Modal,
+  type LayoutChangeEvent,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -483,7 +484,10 @@ function Home({
   navigate: (tab: string) => void;
   doseRevision: number;
 }) {
-  const wide = useWindowDimensions().width >= 1050;
+  const {width, height} = useWindowDimensions();
+  const wide = width >= 1050;
+  const landscape = height < 460 && width >= 560;
+  const room = useContext(ElderViewport);
   const state = useData(`/elders/${elder}/dashboard`, doseRevision),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
@@ -525,14 +529,14 @@ function Home({
     const doses: {time_id:number; time:string; name:string; dosage:string; status:string}[] = state.data?.doses ?? [];
     const ordered = [...doses].sort((a,b) => Number(a.status === "taken") - Number(b.status === "taken"));
     const today = new Date().toLocaleDateString("pt-BR", {timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long"});
-    return <>
+    const spacing = room >= 560 ? 12 : 8;
+    const greeting = (
       <View><Text accessibilityRole="header" style={s.title}>Olá, {user.name.split(" ")[0]}</Text>
         <Text style={s.muted}>{today}</Text></View>
-      <Loading state={state} refresh={false} />
-      <Text style={s.subtitle}>Lembretes de hoje</Text>
-      <Text style={s.muted}>{doses.filter(d => d.status === "taken").length} de {doses.length} doses confirmadas</Text>
-      <ElderPages key={firstUnconfirmed?.time_id ?? "taken"} label="Lembrete">
-        {ordered.map(d => <View key={d.time_id} nativeID={d.time_id === firstUnconfirmed?.time_id ? "cuidali-dose-pendente" : undefined}>
+    );
+    const perPage = room >= 720 && !landscape ? 2 : 1;
+    const cards = [
+      ...ordered.map(d => <View key={"dose-"+d.time_id} nativeID={d.time_id === firstUnconfirmed?.time_id ? "cuidali-dose-pendente" : undefined}>
           <Card tone="blue">
             <View style={{flexDirection:"row", alignItems:"center", gap:12}}>
               <Image source={require("./assets/prototype/pills.png")} style={{width:38,height:38}} resizeMode="contain" />
@@ -542,21 +546,51 @@ function Home({
             {d.status !== "taken" && <Button label="✓ Já tomei" busy={busy}
               disabled={state.loading || !!state.error} onPress={() => dose(d.time_id, "taken")} />}
           </Card>
-        </View>)}
-        {state.data?.appointments.map((appointment: any) => <Card key={appointment.id} tone="yellow">
+        </View>),
+      ...(state.data?.appointments ?? []).map((appointment: any) => <Card key={"consulta-"+appointment.id} tone="yellow">
           <Image source={require("./assets/prototype/calendar.png")} style={{width:34,height:34}} resizeMode="contain" />
           <Text style={s.subtitle}>{appointment.doctor}</Text>
           <Text style={s.text}>{dateTime(appointment.scheduled_at)}</Text>
           <Button label="Ver consultas" tone="light" onPress={() => navigate("Consultas")} />
-        </Card>)}
-      </ElderPages>
-      {state.data && !doses.length && !appointmentsToday && <Text style={s.text}>Nenhum lembrete para hoje.</Text>}
-      {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
-      <View style={{flexDirection:"row", flexWrap:"wrap", gap:8}}>
-        <Button label="Estou bem hoje" tone="light" disabled={busy} onPress={checkIn} />
-        <Button label="Registrar dor" tone="light" onPress={() => navigate("Dores")} />
+        </Card>),
+    ];
+    const reminders = (
+      <View style={{gap:spacing}}>
+        <Loading state={state} refresh={false} />
+        <Text style={s.subtitle}>Lembretes de hoje</Text>
+        <Text style={s.muted}>{doses.filter(d => d.status === "taken").length} de {doses.length} doses confirmadas</Text>
+        <ElderPages key={`${firstUnconfirmed?.time_id ?? "taken"}:${perPage}`} label="Lembretes">
+          {Array.from({length:Math.ceil(cards.length / perPage)}, (_, index) =>
+            <View key={index} style={{gap:8}}>
+              {cards.slice(index * perPage, (index + 1) * perPage)}
+            </View>
+          )}
+        </ElderPages>
+        {state.data && !doses.length && !appointmentsToday && <Text style={s.text}>Nenhum lembrete para hoje.</Text>}
       </View>
-    </>;
+    );
+    const actions = (
+      <View style={{gap:8}}>
+        {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
+        <View style={{flexDirection:"row", flexWrap:"wrap", gap:8}}>
+          <Button label="Estou bem hoje" tone="light" disabled={busy} onPress={checkIn} />
+          <Button label="Registrar dor" tone="light" onPress={() => navigate("Dores")} />
+        </View>
+      </View>
+    );
+    if (landscape) return (
+      <View style={{flexDirection:"row",alignItems:"center",gap:20,marginVertical:"auto"}}>
+        <View style={{flex:1,minWidth:0,gap:16}}>{greeting}{actions}</View>
+        <View style={{flex:1,minWidth:0}}>{reminders}</View>
+      </View>
+    );
+    return (
+      <View style={{flexGrow:1,justifyContent:"space-between",gap:spacing}}>
+        {greeting}
+        {reminders}
+        {actions}
+      </View>
+    );
   }
   return (
     <>
@@ -933,11 +967,16 @@ function BodyMap({disabled = false, view, region, onSelect}: {
   disabled?: boolean;
 }) {
   const compact = useContext(ElderLayout);
+  const room = useContext(ElderViewport);
+  const {width:windowWidth, height:windowHeight} = useWindowDimensions();
+  const shortWide = windowHeight < 460 && windowWidth >= 560;
   const front = view === "front";
-  const height = compact ? 218 : 430;
+  const height = compact
+    ? Math.max(130, Math.min(shortWide ? 250 : 395, (room || 500) - (shortWide ? 145 : 270)))
+    : 430;
   const width = height * 0.62;
-  const hitWidth = compact ? 32 : 46;
-  const hitHeight = compact ? 23 : 44;
+  const hitWidth = Math.min(46, height * 0.145);
+  const hitHeight = Math.min(44, height * 0.102);
 
   return (
     <View testID="pain-body-map" style={{width, height, alignSelf:"center"}}>
@@ -978,6 +1017,8 @@ function BodyMap({disabled = false, view, region, onSelect}: {
 }
 
 function Pains({ elder, user }: { elder: number; user: User }) {
+  const {width, height} = useWindowDimensions();
+  const shortWide = height < 460 && width >= 560;
   const path = `/elders/${elder}/pains`,
     state = useData(path),
     [creating, setCreating] = useState(false),
@@ -1018,7 +1059,8 @@ function Pains({ elder, user }: { elder: number; user: User }) {
         ) : creating ? (
           <>
             <ElderPages label="Etapa">
-<View style={{gap:8}}>
+<View style={{gap:8,flexDirection:shortWide?"row":"column",alignItems:shortWide?"center":"stretch"}}>
+          <View style={{gap:8,flex:shortWide?1:undefined}}>
             <Text style={s.subtitle}>Onde dói?</Text>
             <Text style={s.muted} accessibilityLiveRegion="polite">Local: {regions[region]}</Text>
             <View style={s.row}>
@@ -1051,6 +1093,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                 />
               ))}
             </View>
+          </View>
             <BodyMap
               view={view}
               region={region}
@@ -1614,6 +1657,8 @@ function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () =
 export default function App() {
   const {width,height} = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 980;
+  const [elderHeight, setElderHeight] = useState(0);
+  const shortWide = height < 460 && width >= 560;
   const [setup, setSetup] = useState(false);
   const [drawerOpen,setDrawerOpen] = useState(false);
   const [railCollapsed,setRailCollapsed] = useState(()=>{
@@ -1770,11 +1815,11 @@ export default function App() {
     else if (tab === "Cuidados" && elderLayout)
       screen = <><Text accessibilityRole="header" style={s.title}>Meu cuidado</Text>
         <ElderPages label="Menu">
-          <View key="routine" style={{gap:8}}>
+          <View key="routine" style={shortWide?s.row:{gap:8}}>
             {["Medicamentos", "Consultas", "Dores", "Contatos", "Vínculos"].map(label =>
               <Button key={label} label={label} tone="light" onPress={() => setTab(label)} />)}
           </View>
-          <View key="account" style={{gap:8}}>
+          <View key="account" style={shortWide?s.row:{gap:8}}>
             {["Meus dados", "Termos de Uso", "Política de Privacidade"].map(label =>
               <Button key={label} label={label} tone="light" onPress={() => setTab(label)} />)}
             <Button label="Avisos neste dispositivo" tone="light" onPress={() => setTab("Avisos")} />
@@ -1857,6 +1902,7 @@ export default function App() {
   const Content = elderLayout ? View : ScrollView;
   return (
     <ElderLayout.Provider value={elderLayout}>
+    <ElderViewport.Provider value={elderHeight}>
     <SafeAreaProvider>
       <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FFF",overflow:"hidden"}]}>
         <StatusBar style="dark" />
@@ -1882,7 +1928,14 @@ export default function App() {
             </View>
           )}
           <Content {...(elderLayout ? {
-            testID:"elder-content", style:[s.content,{flex:1,minHeight:0,overflow:"hidden",paddingVertical:height < 640 ? 6 : 14,gap:height < 640 ? 5 : 10,maxWidth:550}],
+            testID:"elder-content",
+            onLayout:({nativeEvent}:LayoutChangeEvent)=>setElderHeight(Math.round(nativeEvent.layout.height)),
+            style:[s.content,{
+              flex:1,minHeight:0,overflow:"hidden",maxWidth:shortWide ? 740 : 550,
+              paddingHorizontal:width >= 380 ? 22 : 16,
+              paddingVertical:height < 640 ? 8 : 20,
+              gap:height < 640 ? 6 : 12,
+            }],
           } : {
             ref:scroll, keyboardShouldPersistTaps:"handled",
             contentContainerStyle:[s.content, desktop && {padding:32,paddingTop:28,maxWidth:user?1120:1240}],
@@ -1931,7 +1984,9 @@ export default function App() {
                 )}
                 {!["Início","Termos de Uso","Política de Privacidade"].includes(tab) && !(elderLayout && ["Cuidados","SOS","Assistente"].includes(tab)) && <BackButton onPress={goBack} />}
                 {!step&&<Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />}
-                {screen}
+                {elderLayout && tab !== "Início"
+                  ? <View testID="elder-screen" style={{marginVertical:"auto",flexShrink:0,gap:height < 640 ? 8 : 14}}>{screen}</View>
+                  : screen}
 
               </>
             ) : (
@@ -1951,6 +2006,7 @@ export default function App() {
         )}
       </SafeAreaView>
     </SafeAreaProvider>
+    </ElderViewport.Provider>
     </ElderLayout.Provider>
   );
 }

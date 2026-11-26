@@ -2,6 +2,7 @@ import React, {createContext, useContext, useEffect, useState} from "react";
 import {Pressable, Text, View} from "react-native";
 
 export const ElderLayout = createContext(false);
+export const ElderViewport = createContext(0);
 
 export function ElderPages({children, label = "Página", jump}: {children: React.ReactNode; label?: string; jump?: {index:number}}) {
   const compact = useContext(ElderLayout);
