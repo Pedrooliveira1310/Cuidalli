@@ -406,8 +406,9 @@ final class Api {
                 ? 'Posso consultar medicamentos e consultas da pessoa acompanhada, informar a data e a hora atuais ou abrir Dores e Alertas.'
                 : 'Posso consultar seus medicamentos e consultas, informar a data e a hora atuais ou ajudar a abrir Dores e SOS.';
             $urgent=preg_match('/\b(sos|socorro|emergencia|urgente)\b|preciso de ajuda/',$q);
-            $aiIntent=(!$urgent && ($data['use_ai']??false)===true) ? AssistantIntent::classify($message) : null;
-            $intent=$urgent ? 'help' : ($aiIntent ?? $this->localAssistantIntent($q,$caregiver));
+            $previousMessage=isset($data['previous_message']) ? $this->text($data,'previous_message',500) : null;
+            $aiAnswer=$urgent ? null : AssistantIntent::respond($message,$previousMessage);
+            $intent=$urgent ? 'help' : ($aiAnswer['intent'] ?? $this->localAssistantIntent($q,$caregiver));
             if ($caregiver && $intent==='help') {
                 $reply='Abra Alertas para acompanhar os pedidos de ajuda da pessoa idosa.'; $action='Alertas';
             }
@@ -433,11 +434,14 @@ final class Api {
                 $a=$this->query('SELECT * FROM appointments WHERE elder_id=? AND cancelled=0 AND scheduled_at>=UTC_TIMESTAMP() ORDER BY scheduled_at LIMIT 3',[$elder])->fetchAll();
                 $reply=$a ? 'Próximas consultas: '.implode('; ',array_map(fn($x)=>$x['specialty'].' em '.(new DateTimeImmutable($x['scheduled_at'],new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i').' em '.$x['location'],$a)) : 'Você não tem próximas consultas cadastradas.'; $action='Consultas';
             } elseif ($intent==='clock') $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
-            elseif ($intent==='greeting') $reply='Olá! '.$assistantOptions.' Como posso ajudar?';
-            else $reply='Posso ajudar com a rotina registrada no Cuidali. '.$assistantOptions.' O que você gostaria de consultar?';
+            elseif ($intent==='greeting') $reply=$aiAnswer['reply'] ?? 'Olá! '.$assistantOptions.' Como posso ajudar?';
+            else $reply=$aiAnswer['reply'] ?? 'Posso ajudar com a rotina registrada no Cuidali. '.$assistantOptions.' O que você gostaria de consultar?';
+            if ($aiAnswer !== null && !in_array($intent,['greeting','other'],true)) {
+                $reply=$aiAnswer['reply']."\n\n".$reply;
+            }
             $this->query('INSERT INTO assistant_messages(elder_id,content,reply) VALUES(?,?,?)',[$elder,$message,$reply]);
             if($this->user['role']==='elder') $this->activity($elder,'assistant_used');
-            return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d'),'mode'=>$aiIntent===null?'local':'ai'];
+            return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d'),'mode'=>$urgent?'urgent':($aiAnswer===null?'local':'ai')];
         }
         $this->fail(405,'Método não permitido.');
     }

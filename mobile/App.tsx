@@ -1548,53 +1548,81 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;care
 }
 function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;navigate:(tab:string)=>void}) {
   const state=useData(`/elders/${elder}/assistant`),[message,setMessage]=useState(""),[draft,setDraft]=useState(""),[busy,setBusy]=useState(false),[action,setAction]=useState<string|null>(null),[confirmations,setConfirmations]=useState<any[]>([]),[doseDate,setDoseDate]=useState("");
-  const [latest, setLatest] = useState<{reply:string; mode?:string}|null>(null);
-  const [useAI, setUseAI] = useState(false);
-  const aiOption = state.data?.ai_available && <Pressable accessibilityRole="switch"
-    accessibilityLabel="Interpretar minhas perguntas com IA" accessibilityState={{checked:useAI}}
-    onPress={()=>setUseAI(value=>!value)} style={{padding:10,backgroundColor:colors.light,borderRadius:12,gap:4}}>
-    <Text style={s.label}>{useAI?"✓ IA ativada":"Ativar IA para interpretar perguntas"}</Text>
-    <Text style={s.muted}>O provedor ({state.data?.ai_provider || "OpenAI"}) recebe o texto da pergunta. Evite incluir dados pessoais ou de saúde.</Text>
-  </Pressable>;
+  const [latest, setLatest] = useState<{question:string;reply:string;mode?:string}|null>(null);
+  const [previousQuestion,setPreviousQuestion]=useState<string|null>(null);
+  const demo=isBrowserDemo();
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
-  async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value,use_ai:useAI});setDraft("");setLatest({reply:r.reply,mode:r.mode});setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
+  async function ask(value:string) {
+    const question=value.trim();
+    if(busy||!question)return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const r=await api(`/elders/${elder}/assistant`,"POST",{message:question,previous_message:previousQuestion});
+      setDraft("");
+      setPreviousQuestion(r.mode==="urgent"?null:question);
+      setLatest({question,reply:r.reply,mode:r.mode});
+      setAction(r.action);
+      setConfirmations(r.confirmation_doses||[]);
+      setDoseDate(r.date||"");
+      state.reload();
+      speak(r.reply);
+    } catch(e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const actions = <View style={{gap:8}}>
     <ElderPages label="Dose">{confirmations.map((d:any)=><Button key={d.time_id} label={`Confirmar ${d.name} · ${d.time}`} onPress={()=>confirmAction(`Você tomou ${d.name}, ${d.dosage}, da dose das ${d.time}?`,async()=>{try{await api(`/elders/${elder}/doses/${d.time_id}`,"POST",{date:doseDate,status:"taken"});setConfirmations(v=>v.filter(x=>x.time_id!==d.time_id));setMessage("Dose confirmada.");}catch(e){setMessage((e as Error).message);}})} />)}</ElderPages>
     {!!action&&<Button label={'Abrir '+(caregiver&&action==='SOS'?'Alertas':action)} onPress={()=>navigate(action)}/>}
 </View>;
+  const composer=<View key="ask" style={{gap:8}}>
+    <Text style={s.label}>Como posso ajudar?</Text>
+    <TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" placeholder="Digite sua mensagem" value={draft}
+      onChangeText={setDraft} maxLength={500} multiline editable={!busy} />
+    <View style={s.row}>
+      <Button label="Enviar" busy={busy} disabled={!draft.trim()} onPress={()=>ask(draft)} />
+      <Button label="Falar com o assistente" tone="light" disabled={busy}
+        onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
+    </View>
+    {demo ? <Text style={s.muted}>Conversa simulada na demonstração.</Text> :
+      <Text style={s.muted}>{state.data?.ai_provider || "O serviço de IA"} recebe a pergunta atual e a anterior, quando houver. Evite incluir dados pessoais ou de saúde.</Text>}
+  </View>;
+  const history=state.data?.items ?? [];
+  const latestInHistory=latest && history.at(-1)?.content===latest.question && history.at(-1)?.reply===latest.reply;
+  const conversation=(latestInHistory?history.slice(0,-1):history).map((i:any)=>
+    <Card key={i.id}><Text style={s.label}>Você</Text><Text style={s.text}>{i.content}</Text>
+      <Text style={s.label}>Cuidali</Text><Text style={s.text}>{i.reply}</Text>
+      <Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>);
+  const reply=latest && <Card>
+    <Text style={s.label}>Cuidali</Text>
+    {latest.mode==="local" && !demo && <Text style={s.muted}>IA indisponível. Resposta do modo de reserva.</Text>}
+    <Text style={s.text} accessibilityLiveRegion="polite">{latest.reply}</Text>
+    <Button label="Ouvir resposta" tone="light" onPress={()=>speak(latest.reply)} />
+  </Card>;
   if (!caregiver) return <>
     <Text style={s.title}>Seu assistente</Text>
     {!!message && <Text accessibilityRole="alert" style={s.error}>{message}</Text>}
     {latest ? <>
-      <Card>{useAI&&<Text style={s.muted}>{latest.mode==="ai"?"Pergunta interpretada com IA":"Pergunta interpretada pelo Cuidali"}</Text>}<Text style={s.text}>{latest.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(latest.reply)} /></Card>
-      {actions}
-      <Button label="Fazer outra pergunta" tone="light" onPress={()=>setLatest(null)} />
+      <ElderPages label="Conversa">
+        {reply}
+        {latest.mode!=="urgent" && (action || confirmations.length>0) && actions}
+      </ElderPages>
+      {latest.mode==="urgent" && actions}
+      <Button label="Continuar conversa" tone="light" onPress={()=>setLatest(null)} />
     </> : <ElderPages label="Assistente">
-      <View key="ask" style={{gap:8}}>    <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
-    <View style={s.row}>
-    <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
-    <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
-    </View>
-</View>
-      {aiOption && <View key="settings" style={{gap:8}}>{aiOption}</View>}
-      <View key="shortcuts" style={{gap:8}}><Text style={s.subtitle}>Perguntas rápidas</Text>    <View style={s.row}>
-      {(caregiver ? ['Remédios de hoje','Próximas consultas','Que dia é hoje?','Ver alertas'] :
-        ['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda']).map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
-    </View>
-</View>
-    {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.muted}>Resposta</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
+      {composer}
+      {conversation.slice().reverse()}
     </ElderPages>}
   </>;
-  return <><Text style={s.title}>Seu assistente</Text><Text style={s.text}>Consulte seus medicamentos, consultas e cuidados por texto ou voz.</Text>{aiOption}
-    {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.muted}>Resposta</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
-    <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
-    <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
-    <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
-    <View style={s.row}>
-      {(caregiver ? ['Remédios de hoje','Próximas consultas','Que dia é hoje?','Ver alertas'] :
-        ['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda']).map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
-    </View>
-{actions}{!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}</>;
+  return <><Text style={s.title}>Seu assistente</Text>
+    {conversation}
+    {latest && <><Card><Text style={s.label}>Você</Text><Text style={s.text}>{latest.question}</Text></Card>{reply}</>}
+    {actions}
+    {composer}
+    {!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}
+  </>;
 }
 function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>void;onRecorded:()=>void}) {
   const compact = useWindowDimensions().width < 600;
