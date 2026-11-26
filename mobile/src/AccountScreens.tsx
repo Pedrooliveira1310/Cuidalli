@@ -1,3 +1,4 @@
+import {ElderPages} from "./ElderPages";
 import React,{useState,useEffect} from 'react';
 import {Text,View,Platform} from 'react-native';
 import {api,User} from './api';
@@ -41,5 +42,5 @@ export function LegalInformation({kind,onBack}:{kind:'terms'|'privacy';onBack:()
  ['Pedidos de ajuda','O SOS registra o pedido e avisa os cuidadores vinculados. O recebimento depende de internet, permissões e condições do aparelho. O discador permite ligar para seu contato; o aplicativo não garante atendimento e não substitui serviços de emergência.'],
  ['Disponibilidade e privacidade','A aplicação pode ficar indisponível por manutenção ou falha de conexão. Você pode interromper o uso, revogar vínculos e solicitar informações à Kannali Corp pelo e-mail kannalicorp@gmail.com. A Política de Privacidade explica o tratamento de dados.']
  ];
- return <><BackButton onPress={onBack}/><Text style={s.title}>{privacy?'Política de Privacidade':'Termos de Uso'}</Text><Text style={s.muted}>Versão de 13 de novembro de 2026</Text>{sections.map(([title,body])=><Card key={title}><Text style={s.subtitle}>{title}</Text><Text selectable style={s.text}>{body}</Text></Card>)}</>;
+ return <><BackButton onPress={onBack}/><Text style={s.title}>{privacy?'Política de Privacidade':'Termos de Uso'}</Text><Text style={s.muted}>Versão de 13 de novembro de 2026</Text><ElderPages label="Seção">{sections.map(([title,body])=><Card key={title}><Text style={s.subtitle}>{title}</Text><Text selectable style={s.text}>{body}</Text></Card>)}</ElderPages></>;
 }

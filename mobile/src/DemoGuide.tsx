@@ -12,7 +12,8 @@ const steps: Record<GuidedStep,{number:number;title:string;description:string}> 
   done:{number:4,title:"Maria já consegue ver a resposta",description:"Abaixo aparece quem assumiu o pedido. Você pode explorar o app ou recomeçar a história."},
 };
 
-export function DemoGuide({step,screen,onNavigate,onFindDose,onSwitch,onRestart}:{
+export function DemoGuide({compact=false,step,screen,onNavigate,onFindDose,onSwitch,onRestart}:{
+  compact?:boolean;
   step:GuidedStep;
   screen:string;
   onNavigate:(screen:string)=>void;
@@ -23,14 +24,14 @@ export function DemoGuide({step,screen,onNavigate,onFindDose,onSwitch,onRestart}
   const current=steps[step];
   return (
     <View style={styles.panel}>
-      <View style={styles.progress} accessibilityLabel={"Etapa "+current.number+" de 4"}>
+      {!compact&&<View style={styles.progress} accessibilityLabel={"Etapa "+current.number+" de 4"}>
         {[1,2,3,4].map(number=><View key={number} style={[styles.segment,
           number<=current.number&&styles.segmentFilled]}/>)}
-      </View>
-      <Text style={styles.step}>Demonstração guiada · {current.number} de 4</Text>
+      </View>}
+      {!compact&&<Text style={styles.step}>Demonstração guiada · {current.number} de 4</Text>}
       <Text accessibilityRole="header" aria-live="polite" style={shared.subtitle}>{current.title}</Text>
-      <Text style={shared.muted}>{step==="accept"&&screen!=="Alertas"
-        ?"Confira a dose no painel de Ana e abra Alertas pra assumir o pedido." : current.description}</Text>
+      {!compact&&<Text style={shared.muted}>{step==="accept"&&screen!=="Alertas"
+        ?"Confira a dose no painel de Ana e abra Alertas pra assumir o pedido." : current.description}</Text>}
       {step==="dose" && screen!=="Início" && <Button label="Abrir rotina de Maria" onPress={()=>onNavigate("Início")}/>}
       {step==="dose" && screen==="Início" && <Button label="Ir para a dose" onPress={onFindDose}/>}
       {step==="request" && screen!=="SOS" && <Button label="Abrir SOS de exemplo" onPress={()=>onNavigate("SOS")}/>}

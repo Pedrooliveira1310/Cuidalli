@@ -1,9 +1,10 @@
+import { ElderLayout, ElderPages } from "./src/ElderPages";
 import {AppIcon,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
 import {CareDrawer,CareSidebar,CareTabs,MenuToggle} from "./src/CareNavigation";
 import {AccountProfile,PasswordRecovery,LegalInformation} from "./src/AccountScreens";
 import {DemoGuide} from "./src/DemoGuide";
 import {Welcome} from "./src/Welcome";
-import React, { useEffect, useState, useCallback, useRef, useSyncExternalStore } from "react";
+import React, { useEffect, useState, useCallback, useRef, useSyncExternalStore, useContext } from "react";
 import {
   AppState,
   useWindowDimensions,
@@ -17,6 +18,7 @@ import {
   ActivityIndicator,
   Pressable,
   TextInput,
+  Modal,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -519,6 +521,43 @@ function Home({
       setBusy(false);
     }
   }
+  if (!caregiver) {
+    const doses: {time_id:number; time:string; name:string; dosage:string; status:string}[] = state.data?.doses ?? [];
+    const ordered = [...doses].sort((a,b) => Number(a.status === "taken") - Number(b.status === "taken"));
+    const today = new Date().toLocaleDateString("pt-BR", {timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long"});
+    return <>
+      <View><Text accessibilityRole="header" style={s.title}>Olá, {user.name.split(" ")[0]}</Text>
+        <Text style={s.muted}>{today}</Text></View>
+      <Loading state={state} refresh={false} />
+      <Text style={s.subtitle}>Lembretes de hoje</Text>
+      <Text style={s.muted}>{doses.filter(d => d.status === "taken").length} de {doses.length} doses confirmadas</Text>
+      <ElderPages key={firstUnconfirmed?.time_id ?? "taken"} label="Lembrete">
+        {ordered.map(d => <View key={d.time_id} nativeID={d.time_id === firstUnconfirmed?.time_id ? "cuidali-dose-pendente" : undefined}>
+          <Card tone="blue">
+            <View style={{flexDirection:"row", alignItems:"center", gap:12}}>
+              <Image source={require("./assets/prototype/pills.png")} style={{width:38,height:38}} resizeMode="contain" />
+              <View style={{flex:1}}><Text style={s.subtitle}>{d.time} · {d.name}</Text>
+                <Text style={s.muted}>{d.dosage} · {statusLabel[d.status]}</Text></View>
+            </View>
+            {d.status !== "taken" && <Button label="✓ Já tomei" busy={busy}
+              disabled={state.loading || !!state.error} onPress={() => dose(d.time_id, "taken")} />}
+          </Card>
+        </View>)}
+        {state.data?.appointments.map((appointment: any) => <Card key={appointment.id} tone="yellow">
+          <Image source={require("./assets/prototype/calendar.png")} style={{width:34,height:34}} resizeMode="contain" />
+          <Text style={s.subtitle}>{appointment.doctor}</Text>
+          <Text style={s.text}>{dateTime(appointment.scheduled_at)}</Text>
+          <Button label="Ver consultas" tone="light" onPress={() => navigate("Consultas")} />
+        </Card>)}
+      </ElderPages>
+      {state.data && !doses.length && !appointmentsToday && <Text style={s.text}>Nenhum lembrete para hoje.</Text>}
+      {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
+      <View style={{flexDirection:"row", flexWrap:"wrap", gap:8}}>
+        <Button label="Estou bem hoje" tone="light" disabled={busy} onPress={checkIn} />
+        <Button label="Registrar dor" tone="light" onPress={() => navigate("Dores")} />
+      </View>
+    </>;
+  }
   return (
     <>
       <DayHero
@@ -556,10 +595,6 @@ function Home({
           )}
           {user.role === "caregiver" && <Alerts elder={elder} caregiver onUpdated={state.reload} />}
           {user.role === "caregiver" && <Card><Text style={s.subtitle}>Acompanhamento de atividade</Text><Form fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]} submit="Salvar acompanhamento" onSave={async v=>{await api(`/elders/${elder}/settings`,"PATCH",{inactivity_hours:Number(v.inactivity_hours)});setMessage("Acompanhamento atualizado.");state.reload();}} /></Card>}
-          {!caregiver && (
-            <MenuRow label="Estou bem hoje" icon="heart"
-              subtitle="Compartilhe como você está com seus cuidadores." onPress={checkIn} busy={busy}/>
-          )}
           <Text style={s.subtitle}>Remédios de hoje</Text>
           {!state.data.doses.length && (
             <Card><Text style={s.text}>Nenhuma dose prevista para hoje.</Text></Card>
@@ -576,21 +611,6 @@ function Home({
               <View style={{alignSelf:'flex-start',paddingHorizontal:12,paddingVertical:6,borderRadius:20,backgroundColor:d.status==='taken'?'#DFF4EB':'#EAF1F9'}}>
                 <Text style={{fontSize:16,lineHeight:23,fontWeight:'600',color:d.status==='taken'?'#14675C':'#385675'}}>{statusLabel[d.status]}</Text>
               </View>
-              {user.role === "elder" && d.status !== "taken" && (
-                <View style={{flexDirection:"row",flexWrap:"wrap",gap:12}}>
-                  <Button
-                    label="✓ Já tomei"
-                    disabled={busy || state.loading || !!state.error}
-                    onPress={() => dose(d.time_id, "taken")}
-                  />
-                  <Button
-                    label="Ainda não"
-                    tone="light"
-                    disabled={busy || state.loading || !!state.error}
-                    onPress={() => dose(d.time_id, "pending")}
-                  />
-                </View>
-              )}
             </Card></View>
           ))}</View>}
           <Text style={s.subtitle}>Consultas de hoje</Text>
@@ -695,10 +715,10 @@ function Resources({
         </Text>
       )}
       {state.denied ? (
-        <Loading state={state} />
+        <Loading state={state} refresh={caregiver} />
       ) : editing ? (
         <Card>
-          <BackButton label="Voltar aos registros" onPress={()=>setEditing(null)} />
+          {caregiver && <BackButton label="Voltar aos registros" onPress={()=>setEditing(null)} />}
           <Text style={s.subtitle}>{editing.id ? "Editar" : "Adicionar"}</Text>
           <Form
             key={editing.id || "new"}
@@ -752,11 +772,11 @@ function Resources({
               }}
             />
           )}
-          <Loading state={state} />
+          <Loading state={state} refresh={caregiver} />
           {state.data?.items.length === 0 && (
             <Text style={s.text}>Nenhum registro cadastrado.</Text>
           )}
-          {state.data?.items.map((item: any) => (
+          <ElderPages label="Registro">{state.data?.items.map((item: any) => (
             <Card
               key={item.id}
               tone={
@@ -879,7 +899,7 @@ function Resources({
                   </>
                 )}
             </Card>
-          ))}
+          ))}</ElderPages>
         </>
       )}
     </>
@@ -896,6 +916,7 @@ function BodyMap({
   onSelect: (r: string) => void;
   disabled?: boolean;
 }) {
+  const compact = useContext(ElderLayout);
   const points: [string, number, number][] = [
     ["head", 45, 2],
     ["left_shoulder", 66, 22],
@@ -918,7 +939,7 @@ function BodyMap({
   // Costas espelham a posição visual, mantendo os lados anatômicos do paciente.
   return (
     <View
-      style={{ height: 460, width: "100%", maxWidth: 280, alignSelf: "center" }}
+      style={{ height: compact ? 225 : 460, width: "100%", maxWidth: 280, alignSelf: "center" }}
     >
       {points.map(([r, x, y]) => (
         <Pressable
@@ -932,8 +953,8 @@ function BodyMap({
             position: "absolute",
             left: `${view === "front" ? x : 90 - x}%` as any,
             top: `${y}%` as any,
-            width: 56,
-            height: 56,
+            width: compact ? 44 : 56,
+            height: compact ? 32 : 56,
             marginLeft: -14,
             marginTop: -5,
             justifyContent: "center",
@@ -942,8 +963,8 @@ function BodyMap({
         >
           <View
             style={{
-              height: r === "head" ? 50 : 38,
-              width: r === "head" ? 45 : 32,
+              height: compact ? 24 : r === "head" ? 50 : 38,
+              width: compact ? 27 : r === "head" ? 45 : 32,
               borderRadius: 18,
               backgroundColor: r === region ? colors.blue : "#CEE1F4",
               borderWidth: r === region ? 3 : 1,
@@ -992,9 +1013,11 @@ function Pains({ elder, user }: { elder: number; user: User }) {
           <Button label="Registrar uma dor" onPress={() => setCreating(true)} />
         )}{" "}
         {state.denied ? (
-          <Loading state={state} />
+          <Loading state={state} refresh={user.role === "caregiver"} />
         ) : creating ? (
           <>
+            <ElderPages label="Etapa">
+<View style={{gap:8}}>
             <Text style={s.subtitle}>Onde dói?</Text>
             <View style={s.row}>
               {[
@@ -1026,35 +1049,35 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                 />
               ))}
             </View>
-            <Text style={s.muted}>
-              Toque onde dói. Selecione a frente ou as costas para encontrar a região.
-            </Text>
             <BodyMap
               view={view}
               region={region}
               onSelect={setRegion}
               disabled={busy}
             />
+</View>
+<View style={{gap:8}}>
             <Text style={s.subtitle}>Local: {regions[region]}</Text>
             <Text style={s.muted}>
               Também é possível selecionar pela lista:
             </Text>
-            <View style={s.row}>
-              {Object.entries(regions)
-                .filter(([k]) =>
-                  view === "front"
-                    ? !["upper_back", "lower_back"].includes(k)
-                    : !["chest", "abdomen"].includes(k),
-                )
-                .map(([k, l]) => (
-                  <Button
-                    key={k}
-                    label={(region === k ? "✓ " : "") + l}
-                    tone={region === k ? "blue" : "light"}
-                    onPress={() => setRegion(k)}
-                  />
-                ))}
-            </View>
+            <ElderPages label="Locais">
+              {Array.from({length:3}, (_, page) => (
+                <View key={page} style={s.row}>
+                  {Object.entries(regions)
+                    .filter(([key]) => view === "front"
+                      ? !["upper_back", "lower_back"].includes(key)
+                      : !["chest", "abdomen"].includes(key))
+                    .slice(page * 6, page * 6 + 6)
+                    .map(([key, label]) => (
+                      <Button key={key} label={(region === key ? "✓ " : "") + label}
+                        tone={region === key ? "blue" : "light"} onPress={() => setRegion(key)} />
+                    ))}
+                </View>
+              ))}
+            </ElderPages>
+</View>
+<View style={{gap:8}}>
             <Text style={s.subtitle}>Como é a dor?</Text>
             <View style={s.row}>
               {[
@@ -1073,6 +1096,8 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                 />
               ))}
             </View>
+</View>
+<View style={{gap:8}}>
             <Text style={s.subtitle}>Quanto está doendo? {intensity}/10</Text>
             <Text style={s.muted}>
               1–2 leve; 3–4 média; 5–6 forte; 7–8 muito forte; 9–10 máxima. O
@@ -1088,6 +1113,8 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                 />
               ))}
             </View>
+</View>
+<View style={{gap:8}}>
             <Text style={s.subtitle}>Desde quando?</Text>
             {["Hoje", "Alguns dias", "Mais de 1 semana"].map((o) => (
               <Button
@@ -1115,15 +1142,16 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                 setCreating(false);
                 state.reload();
               }}
-            />
+            /></View>
+            </ElderPages>
           </>
         ) : (
           <>
-            <Loading state={state} />
+            <Loading state={state} refresh={user.role === "caregiver"} />
             {state.data?.items.length === 0 && (
               <Text style={s.text}>Nenhuma dor registrada.</Text>
             )}
-            {!!state.data?.items.length && (
+            {user.role === "caregiver" && !!state.data?.items.length && (
               <Card>
                 <Text style={s.subtitle}>Evolução da intensidade</Text>
                 <Text style={s.muted}>
@@ -1154,7 +1182,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                   ))}
               </Card>
             )}
-            {state.data?.items.map((p: any) => (
+            <ElderPages label="Registro">{state.data?.items.map((p: any) => (
               <Card key={p.id}>
                 <Text style={s.subtitle}>
                   {p.intensity}/10 · {regions[p.region]}
@@ -1188,7 +1216,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                     />
                   )}
               </Card>
-            ))}
+            ))}</ElderPages>
           </>
         )}
       </>
@@ -1292,7 +1320,7 @@ function Links({
       {state.data?.items.length === 0 && (
         <Text style={s.text}>Você ainda não possui vínculos.</Text>
       )}
-      {state.data?.items.map((u: any) => (
+      <ElderPages label="Vínculo">{state.data?.items.map((u: any) => (
         <Card key={u.id}>
           <Text style={s.subtitle}>{u.name}</Text>
           {user.role === "caregiver" && (
@@ -1325,7 +1353,7 @@ function Links({
             }
           />
         </Card>
-      ))}
+      ))}</ElderPages>
     </>
   );
 }
@@ -1337,25 +1365,23 @@ function SOS({
   navigate: (tab: string) => void;
 }) {
   const state = useData(`/elders/${elder}/contacts`),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""), [history, setHistory] = useState(guidedStep() === "done");
   const contact = state.data?.items.find(
     (c: any) => Number(c.is_primary) === 1,
   );
+  if (history) return <>
+    <Text style={s.title}>Meus pedidos de ajuda</Text>
+    <Button label="Voltar para o SOS" tone="light" onPress={() => setHistory(false)} />
+    <Alerts elder={elder} caregiver={false} />
+  </>;
   return (
     <>
       <Text style={s.title}>Precisa de ajuda?</Text>
-      <Loading state={state} />
-      <Text style={s.text}>
-        O SOS envia um pedido de ajuda aos seus cuidadores. Você também pode ligar
-        para seu contato principal e iniciar a ligação no telefone.
-      </Text>
+      <Loading state={state} refresh={false} />
       {contact ? (
         <Card>
           <Text style={s.subtitle}>
             {contact.name} ({contact.relationship})
-          </Text>
-          <Text selectable style={s.text}>
-            {contact.phone}
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -1377,9 +1403,9 @@ function SOS({
               )
             }
             style={{
-              height: 180,
-              width: 180,
-              borderRadius: 90,
+              height: 72,
+              width: 128,
+              borderRadius: 24,
               backgroundColor: "#FAD5D5",
               alignSelf: "center",
               justifyContent: "center",
@@ -1405,9 +1431,9 @@ function SOS({
         )
       )}
       {!contact && <Button label="Enviar pedido de ajuda aos cuidadores" tone="red" onPress={async()=>{try { const r=await api(`/elders/${elder}/sos`,"POST");setMessage(r.message); } catch(e) {setMessage((e as Error).message);} }} />}
-      <Alerts elder={elder} caregiver={false} />
+      <Button label="Meus pedidos de ajuda" tone="light" onPress={() => setHistory(true)} />
       {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
-      <Text style={s.muted}>Seus pedidos ficam disponíveis para os cuidadores vinculados acompanharem e confirmarem o atendimento.</Text>
+
     </>
   );
 }
@@ -1449,7 +1475,7 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;care
       </View>
     )}
     {state.data&&!filtered.length&&<Text style={s.text}>{filter==="all"?"Nenhum alerta registrado.":"Nenhum alerta com esse status."}</Text>}
-    {visible.map(a=><Card key={a.id} tone={a.status==='open'?'yellow':undefined}>
+    <ElderPages label="Pedido">{visible.map(a=><Card key={a.id} tone={a.status==='open'?'yellow':undefined}>
       <Text style={s.subtitle}>{names[a.kind]}</Text>
       <View style={s.row}>
         <Text style={s.muted}>{dateTime(a.created_at)}</Text>
@@ -1463,12 +1489,37 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;care
         {a.status==='open'&&<Button label="Vou acompanhar" onPress={()=>update(a.id,'accepted')} />}
         <Button label="Concluir atendimento" tone={a.status==='open'?'light':'blue'} onPress={()=>confirmAction('Você verificou a situação e deseja concluir este alerta?',()=>update(a.id,'resolved'))} />
       </View>}
-    </Card>)}{!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}</>;
+    </Card>)}</ElderPages>{!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}</>;
 }
 function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;navigate:(tab:string)=>void}) {
   const state=useData(`/elders/${elder}/assistant`),[message,setMessage]=useState(""),[draft,setDraft]=useState(""),[busy,setBusy]=useState(false),[action,setAction]=useState<string|null>(null),[confirmations,setConfirmations]=useState<any[]>([]),[doseDate,setDoseDate]=useState("");
+  const [latest, setLatest] = useState<{reply:string}|null>(null);
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
-  async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value});setDraft("");setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
+  async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value});setDraft("");setLatest({reply:r.reply});setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
+  const actions = <View style={{gap:8}}>
+    <ElderPages label="Dose">{confirmations.map((d:any)=><Button key={d.time_id} label={`Confirmar ${d.name} · ${d.time}`} onPress={()=>confirmAction(`Você tomou ${d.name}, ${d.dosage}, da dose das ${d.time}?`,async()=>{try{await api(`/elders/${elder}/doses/${d.time_id}`,"POST",{date:doseDate,status:"taken"});setConfirmations(v=>v.filter(x=>x.time_id!==d.time_id));setMessage("Dose confirmada.");}catch(e){setMessage((e as Error).message);}})} />)}</ElderPages>
+    {!!action&&<Button label={'Abrir '+(caregiver&&action==='SOS'?'Alertas':action)} onPress={()=>navigate(action)}/>}
+</View>;
+  if (!caregiver) return <>
+    <Text style={s.title}>Seu assistente</Text>
+    {!!message && <Text accessibilityRole="alert" style={s.error}>{message}</Text>}
+    {latest ? <>
+      <Card><Text style={s.text}>{latest.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(latest.reply)} /></Card>
+      {actions}
+      <Button label="Fazer outra pergunta" tone="light" onPress={()=>setLatest(null)} />
+    </> : <ElderPages label="Assistente">
+      <View key="ask" style={{gap:8}}>    <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
+    <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
+    <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
+</View>
+      <View key="shortcuts" style={{gap:8}}><Text style={s.subtitle}>Perguntas rápidas</Text>    <View style={s.row}>
+      {(caregiver ? ['Remédios de hoje','Próximas consultas','Que dia é hoje?','Ver alertas'] :
+        ['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda']).map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
+    </View>
+</View>
+    {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.muted}>Resposta</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
+    </ElderPages>}
+  </>;
   return <><Text style={s.title}>Seu assistente</Text><Text style={s.text}>Consulte seus medicamentos, consultas e cuidados por texto ou voz.</Text>
     {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.muted}>Resposta</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
     <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
@@ -1478,9 +1529,7 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
       {(caregiver ? ['Remédios de hoje','Próximas consultas','Que dia é hoje?','Ver alertas'] :
         ['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda']).map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
     </View>
-    {confirmations.map((d:any)=><Button key={d.time_id} label={`Confirmar ${d.name} · ${d.time}`} onPress={()=>confirmAction(`Você tomou ${d.name}, ${d.dosage}, da dose das ${d.time}?`,async()=>{try{await api(`/elders/${elder}/doses/${d.time_id}`,"POST",{date:doseDate,status:"taken"});setConfirmations(v=>v.filter(x=>x.time_id!==d.time_id));setMessage("Dose confirmada.");}catch(e){setMessage((e as Error).message);}})} />)}
-    {!!action&&<Button label={'Abrir '+(caregiver&&action==='SOS'?'Alertas':action)} onPress={()=>navigate(action)}/>}{!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}
-    <Text style={s.muted}>O assistente consulta seus registros. Não faz diagnósticos nem altera prescrições.</Text></>;
+{actions}{!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}</>;
 }
 function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>void;onRecorded:()=>void}) {
   const compact = useWindowDimensions().width < 600;
@@ -1514,6 +1563,9 @@ function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>
     }
   }
   return (
+    <Modal transparent animationType="fade" onRequestClose={()=>setNotice(null)}>
+      <View style={{flex:1,justifyContent:"center",alignItems:"center",padding:16,backgroundColor:"#071B3370"}}>
+      <View style={{width:"100%",maxWidth:460}} accessibilityViewIsModal>
     <Card tone="yellow">
       <View style={{flexDirection:"row",gap:12,alignItems:"center"}}>
         <AppIcon name="bell" color="#79511C"/>
@@ -1528,7 +1580,9 @@ function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>
         <View style={compact&&{width:"100%"}}><Button label="Ver medicamentos" disabled={busy} tone="light" onPress={()=>{setNotice(null);navigate('Medicamentos');}}/></View>
       </View>
       {!!error&&<Text style={s.error}>{error}</Text>}
+      <Button label="Fechar lembrete" tone="light" onPress={()=>setNotice(null)} />
     </Card>
+    </View></View></Modal>
   );
 }
 function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
@@ -1556,7 +1610,7 @@ function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () =
   </Card>;
 }
 export default function App() {
-  const {width} = useWindowDimensions();
+  const {width,height} = useWindowDimensions();
   const desktop = Platform.OS === "web" && width >= 980;
   const [setup, setSetup] = useState(false);
   const [drawerOpen,setDrawerOpen] = useState(false);
@@ -1575,6 +1629,7 @@ export default function App() {
   const navigationHistory = useRef<string[]>([]);
   const currentTab = useRef("Início");
   const caregiver = user?.role === "caregiver";
+  const elderLayout = user?.role === "elder";
   const demo = !!user && isBrowserDemo();
   const step = useSyncExternalStore(subscribeDemo,guidedStep,()=>null);
   useEffect(() => {
@@ -1710,6 +1765,34 @@ export default function App() {
       );
     else if (["Termos de Uso","Política de Privacidade"].includes(tab)) screen=<LegalInformation kind={tab==="Termos de Uso"?"terms":"privacy"} onBack={goBack} />;
     else if (tab === "Meus dados") screen=<AccountProfile user={user} onSaved={setUser} />;
+    else if (tab === "Cuidados" && elderLayout)
+      screen = <><Text accessibilityRole="header" style={s.title}>Meu cuidado</Text>
+        <ElderPages label="Menu">
+          <View key="routine" style={{gap:8}}>
+            {["Medicamentos", "Consultas", "Dores", "Contatos", "Vínculos"].map(label =>
+              <Button key={label} label={label} tone="light" onPress={() => setTab(label)} />)}
+          </View>
+          <View key="account" style={{gap:8}}>
+            {["Meus dados", "Termos de Uso", "Política de Privacidade"].map(label =>
+              <Button key={label} label={label} tone="light" onPress={() => setTab(label)} />)}
+            <Button label="Avisos neste dispositivo" tone="light" onPress={() => setTab("Avisos")} />
+            <Button label={demo ? "Sair da demonstração" : "Sair da conta"} tone="red" busy={logoutBusy} onPress={() => confirmAction("Sair desta conta?", logout)} />
+          </View>
+          {demo && <Button label="Ver como cuidador" tone="light" onPress={()=>loggedIn(switchDemoProfile(),true)} />}
+        </ElderPages></>;
+    else if (tab === "Avisos" && elderLayout) screen = <>
+      <Text style={s.title}>Avisos</Text>
+      {Platform.OS === "web" && !!window.CuidaliNative ? <>
+        <Button label="Ativar avisos neste aparelho" onPress={() => {window.CuidaliNative?.setMonitoring(true);setSessionMessage("Avisos ativados.");}} />
+        <Button label="Desativar avisos neste aparelho" tone="light" onPress={() => {window.CuidaliNative?.setMonitoring(false);setSessionMessage("Avisos desativados.");}} />
+      </> : !demo && Platform.OS === "web" && typeof Notification !== "undefined" ?
+        <Button label="Ativar avisos neste navegador" onPress={async () => {
+          try {
+            if (!window.CuidaliWebPush) throw new Error("Avisos indisponíveis. Tente novamente.");
+            setSessionMessage(await window.CuidaliWebPush.activate(token => api("/push-tokens","POST",{token,platform:"web"})));
+          } catch(error) {setSessionMessage((error as Error).message);}
+        }} /> : <Text style={s.text}>Avisos indisponíveis nesta sessão.</Text>}
+      </>;
     else if (tab === "Cuidados")
       screen = (
         <>
@@ -1769,14 +1852,16 @@ export default function App() {
         />
       );
   }
+  const Content = elderLayout ? View : ScrollView;
   return (
+    <ElderLayout.Provider value={elderLayout}>
     <SafeAreaProvider>
-      <SafeAreaView style={s.page}>
+      <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FFF",overflow:"hidden"}]}>
         <StatusBar style="dark" />
         <View aria-hidden={drawerOpen&&!desktop}
           importantForAccessibility={drawerOpen&&!desktop?"no-hide-descendants":"auto"}
-          style={{flex:1,flexDirection:desktop?"row":"column"}}>
-        {user && desktop && (
+          style={{flex:1,flexDirection:desktop&&!elderLayout?"row":"column"}}>
+        {user && desktop && !elderLayout && (
           <CareSidebar name={user.name} caregiver={caregiver} screen={tab} onNavigate={setTab}
             collapsed={railCollapsed} onToggle={()=>setRailCollapsed(value=>!value)}/>
         )}
@@ -1784,7 +1869,7 @@ export default function App() {
           style={{ flex: 1, minWidth:0 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          {user && !desktop && (
+          {user && !desktop && !elderLayout && (
             <View style={{flexDirection:"row",alignItems:"center",gap:10,paddingHorizontal:16,
               borderBottomWidth:1,borderColor:"#DAE4F0",backgroundColor:"#FFF"}}>
               <MenuToggle label="Abrir menu" icon="menu" expanded={drawerOpen} controls="cuidali-mobile-menu"
@@ -1794,11 +1879,12 @@ export default function App() {
               </View>
             </View>
           )}
-          <ScrollView
-            ref={scroll}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={[s.content, desktop && {padding:32,paddingTop:28,maxWidth:user?1120:1240}]}
-          >
+          <Content {...(elderLayout ? {
+            testID:"elder-content", style:[s.content,{flex:1,minHeight:0,overflow:"hidden",paddingVertical:height < 640 ? 6 : 14,gap:height < 640 ? 5 : 10,maxWidth:550}],
+          } : {
+            ref:scroll, keyboardShouldPersistTaps:"handled",
+            contentContainerStyle:[s.content, desktop && {padding:32,paddingTop:28,maxWidth:user?1120:1240}],
+          })}>
             {!!sessionMessage && (
               <Text accessibilityRole="alert" style={s.error}>
                 {sessionMessage}
@@ -1811,7 +1897,7 @@ export default function App() {
                 onCancel={getServer() ? () => setSetup(false) : undefined} />
             ) : user ? (
               <>
-                {demo && (
+                {demo && !elderLayout && (
                   <View style={[s.row,{justifyContent:"space-between",backgroundColor:colors.light,
                     borderRadius:12,paddingLeft:12,paddingRight:6}]}>
                     <Text style={[s.muted,{fontWeight:"700",fontSize:14}]}>Dados de demonstração</Text>
@@ -1828,10 +1914,10 @@ export default function App() {
                     </Pressable>
                   </View>
                 )}
-                {demo&&step&&<DemoGuide step={step} screen={tab} onNavigate={setTab}
+                {demo&&step&&(!elderLayout || (step==="switch-caregiver" && tab==="SOS") || (["done","request"].includes(step) && tab==="Início"))&&<DemoGuide compact={elderLayout} step={step} screen={tab} onNavigate={setTab}
                   onFindDose={()=>{
                     const dose=document.getElementById("cuidali-dose-pendente");
-                    dose?.scrollIntoView({block:"center"});
+                    if (!elderLayout) dose?.scrollIntoView({block:"center"});
                     dose?.querySelector<HTMLElement>('[aria-label="✓ Já tomei"]')?.focus({preventScroll:true});
                   }}
                   onSwitch={()=>loggedIn(switchDemoProfile(),true)}
@@ -1841,9 +1927,10 @@ export default function App() {
                     <Button label="Selecionar outro idoso · Vínculos" tone="light" onPress={() => setTab("Vínculos")} />
                   </View>
                 )}
-                {!["Início","Termos de Uso","Política de Privacidade"].includes(tab) && <BackButton onPress={goBack} />}
+                {!["Início","Termos de Uso","Política de Privacidade"].includes(tab) && !(elderLayout && ["Cuidados","SOS","Assistente"].includes(tab)) && <BackButton onPress={goBack} />}
                 {!step&&<Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />}
                 {screen}
+
               </>
             ) : (
               <>
@@ -1851,16 +1938,17 @@ export default function App() {
                 {Platform.OS !== "web" && !androidWebPackage && <Button label="Configurar servidor" tone="light" onPress={() => setSetup(true)} />}
               </>
             )}
-          </ScrollView>
+          </Content>
         </KeyboardAvoidingView>
-        {user && !desktop && <CareTabs caregiver={caregiver} screen={tab} onNavigate={setTab}/>}
+        {user && (!desktop || elderLayout) && <CareTabs caregiver={caregiver} screen={tab} onNavigate={setTab}/>}
         </View>
-        {user && !desktop && (
+        {user && !desktop && !elderLayout && (
           <CareDrawer name={user.name} caregiver={caregiver} screen={tab} visible={drawerOpen}
             onToggle={()=>setDrawerOpen(false)}
             onNavigate={next=>{setDrawerOpen(false);setTab(next);}}/>
         )}
       </SafeAreaView>
     </SafeAreaProvider>
+    </ElderLayout.Provider>
   );
 }

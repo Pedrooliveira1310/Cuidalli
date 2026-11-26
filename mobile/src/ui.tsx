@@ -1,3 +1,4 @@
+import {ElderLayout, ElderPages} from "./ElderPages";
 import React, {
   useState,
   useEffect,
@@ -193,6 +194,8 @@ export function Form({
   onCancel?: () => void;
   onBusyChange?: (busy: boolean) => void;
 }) {
+  const elder = useContext(ElderLayout);
+  const [jump, setJump] = useState<{index:number}>();
   const [values, setValues] = useState<Record<string, any>>(() => {
     const v = { ...initial };
     if (fields.some((f) => f.key === "times"))
@@ -299,6 +302,7 @@ export function Form({
     setError(missing ? "Preencha todos os campos obrigatórios." : "");
     const first = fields.find((f) => issues[f.key]);
     if (first) {
+      if (elder) setJump({index:fields.indexOf(first)});
       (refs.current[first.key] || refs.current[first.key + "0"])?.focus();
       return;
     }
@@ -432,10 +436,7 @@ export function Form({
       />
     );
   }
-  return (
-    <FormBusy.Provider value={busy}>
-      <View style={{ gap: 16 }}>
-        {fields.map((f) => (
+  const inputs = fields.map((f) => (
           <View key={f.key} style={{ gap: 8 }}>
             <Text style={styles.label}>
               {f.key === "times" ? "Horários" : f.label}
@@ -450,7 +451,7 @@ export function Form({
               />
             ) : f.key === "times" ? (
               <>
-                {(values.times as string[]).map((time, i) => (
+                <ElderPages label="Horário">{(values.times as string[]).map((time, i) => (
                   <View key={i} style={{ gap: 8 }}>
                     {input(
                       { ...f, label: `Horário ${i + 1}` },
@@ -477,7 +478,7 @@ export function Form({
                       }
                     />
                   </View>
-                ))}
+                ))}</ElderPages>
                 <Button
                   label="Adicionar horário"
                   disabled={busy || values.times.length >= 24}
@@ -496,14 +497,21 @@ export function Form({
                 {errors[f.key]}
               </Text>
             )}
-          </View>
-        ))}
-        {!!error && (
-          <Text accessibilityRole="alert" style={styles.error}>
-            {error}
-          </Text>
-        )}
+          </View>        ));
+  const feedback = !!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>;
+  if (elder) return <FormBusy.Provider value={busy}>
+    <ElderPages label="Campo" jump={jump}>
+      {inputs}
+      <View key="save" style={{gap:8}}>
+        {feedback}
+        <Button label={submit} onPress={save} busy={busy} />
       </View>
+    </ElderPages>
+    {onCancel && <Button label="Cancelar" tone="light" onPress={onCancel} disabled={busy} />}
+  </FormBusy.Provider>;
+  return (
+    <FormBusy.Provider value={busy}>
+      <View style={{gap:16}}>{inputs}{feedback}</View>
       <View style={{ gap: 16, marginTop: 16 }}>
         <Button label={submit} onPress={save} busy={busy} disabled={busy} />
         {onCancel && (
