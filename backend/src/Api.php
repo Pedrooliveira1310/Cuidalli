@@ -397,7 +397,7 @@ final class Api {
             return ['message'=>$status==='accepted'?'Você assumiu o acompanhamento.':'Alerta concluído.'];
         }
         if ($resource==='assistant') {
-            if ($method==='GET') return ['items'=>array_reverse($this->query('SELECT * FROM assistant_messages WHERE elder_id=? ORDER BY id DESC LIMIT 30',[$elder])->fetchAll()),'ai_available'=>AssistantIntent::available()];
+            if ($method==='GET') return ['items'=>array_reverse($this->query('SELECT * FROM assistant_messages WHERE elder_id=? ORDER BY id DESC LIMIT 30',[$elder])->fetchAll()),'ai_available'=>AssistantIntent::available(),'ai_provider'=>AssistantIntent::provider()];
             if ($method!=='POST') $this->fail(405,'Método não permitido.');
             $this->rate('assistant:'.$this->user['id'],60); $message=$this->text($data,'message',500);
             $q=strtolower(strtr($message,['á'=>'a','à'=>'a','â'=>'a','ã'=>'a','é'=>'e','ê'=>'e','í'=>'i','ó'=>'o','ô'=>'o','õ'=>'o','ú'=>'u','ç'=>'c','Á'=>'a','À'=>'a','Â'=>'a','Ã'=>'a','É'=>'e','Ê'=>'e','Í'=>'i','Ó'=>'o','Ô'=>'o','Õ'=>'o','Ú'=>'u','Ç'=>'c'])); $action=null; $confirmationDoses=[];

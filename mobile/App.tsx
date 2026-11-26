@@ -1554,7 +1554,7 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     accessibilityLabel="Interpretar minhas perguntas com IA" accessibilityState={{checked:useAI}}
     onPress={()=>setUseAI(value=>!value)} style={{padding:10,backgroundColor:colors.light,borderRadius:12,gap:4}}>
     <Text style={s.label}>{useAI?"✓ IA ativada":"Ativar IA para interpretar perguntas"}</Text>
-    <Text style={s.muted}>Envia o texto da pergunta à OpenAI. Evite escrever dados pessoais ou de saúde.</Text>
+    <Text style={s.muted}>O provedor ({state.data?.ai_provider || "OpenAI"}) recebe o texto da pergunta. Evite incluir dados pessoais ou de saúde.</Text>
   </Pressable>;
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
   async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value,use_ai:useAI});setDraft("");setLatest({reply:r.reply,mode:r.mode});setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
