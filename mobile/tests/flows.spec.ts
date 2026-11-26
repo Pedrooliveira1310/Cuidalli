@@ -117,7 +117,8 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await caregiver.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(caregiver.getByText("Medicamento salvo.")).toBeVisible();
   await page.getByRole("tab", { name: "Início", exact: true }).click();
-  await expect(page.getByText("08:00 · Remédio E2E")).toBeVisible();
+  await expect(page.getByText("Remédio E2E", {exact:true}).first()).toBeVisible();
+  await expect(page.getByText("08:00", {exact:true})).toBeVisible();
   const progress = page.getByRole("progressbar", { name: "Doses confirmadas" });
   await expect(progress).toHaveAttribute("aria-valuenow", "0");
   await page
@@ -237,7 +238,8 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await page.getByRole('button',{name:'SOS: pedir ajuda a Contato SOS E2E'}).click();
   expect((await sosSaved).ok()).toBeTruthy();
   await caregiver.getByRole('tab',{name:'Assistente',exact:true}).click();
-  await caregiver.getByRole('button',{name:'Ver alertas',exact:true}).click();
+  await caregiver.getByRole('textbox',{name:'Mensagem para o assistente'}).fill('Ver alertas');
+  await caregiver.getByRole('button',{name:'Enviar',exact:true}).click();
   await expect(caregiver.getByRole('button',{name:'Abrir SOS',exact:true})).toHaveCount(0);
   await caregiver.getByRole('button',{name:'Abrir Alertas',exact:true}).click();
   const sosCard=caregiver.getByText('Pedido de ajuda',{exact:true}).locator('..');
