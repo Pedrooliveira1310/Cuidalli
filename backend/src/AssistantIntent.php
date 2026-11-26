@@ -11,7 +11,7 @@ Escolha uma intenção: next_dose para o próximo horário de dose cadastrado; m
 Para intenções ligadas a registros, horários ou ações, escreva apenas uma breve introdução à informação que o aplicativo vai mostrar. O aplicativo consulta os registros e mostra as ações disponíveis. Você não tem acesso a registros, horário atual nem pode realizar ações. Nunca invente dados, diga que uma ação foi concluída ou produza links.
 Para saudações e conversa cotidiana, responda diretamente. Não dê diagnóstico, aconselhamento médico individual, prescrição ou alterações de doses. Se pedirem essas orientações, indique um profissional de saúde. Em situações de risco, incentive a procurar socorro.
 PROMPT;
-    private const CLOUDFLARE_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+    private const CLOUDFLARE_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
     public static function provider(): ?string {
         $account = getenv('CLOUDFLARE_ACCOUNT_ID') ?: '';
