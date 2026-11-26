@@ -1550,7 +1550,6 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
   const state=useData(`/elders/${elder}/assistant`),[message,setMessage]=useState(""),[draft,setDraft]=useState(""),[busy,setBusy]=useState(false),[action,setAction]=useState<string|null>(null),[confirmations,setConfirmations]=useState<any[]>([]),[doseDate,setDoseDate]=useState("");
   const [latest, setLatest] = useState<{question:string;reply:string;mode?:string}|null>(null);
   const [previousQuestion,setPreviousQuestion]=useState<string|null>(null);
-  const demo=isBrowserDemo();
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
   async function ask(value:string) {
     const question=value.trim();
@@ -1586,8 +1585,6 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
       <Button label="Falar com o assistente" tone="light" disabled={busy}
         onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
     </View>
-    {demo ? <Text style={s.muted}>Conversa simulada na demonstração.</Text> :
-      <Text style={s.muted}>{state.data?.ai_provider || "O serviço de IA"} recebe a pergunta atual e a anterior, quando houver. Evite incluir dados pessoais ou de saúde.</Text>}
   </View>;
   const history=state.data?.items ?? [];
   const latestInHistory=latest && history.at(-1)?.content===latest.question && history.at(-1)?.reply===latest.reply;
@@ -1597,7 +1594,6 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
       <Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>);
   const reply=latest && <Card>
     <Text style={s.label}>Cuidali</Text>
-    {latest.mode==="local" && !demo && <Text style={s.muted}>IA indisponível. Resposta do modo de reserva.</Text>}
     <Text style={s.text} accessibilityLiveRegion="polite">{latest.reply}</Text>
     <Button label="Ouvir resposta" tone="light" onPress={()=>speak(latest.reply)} />
   </Card>;
