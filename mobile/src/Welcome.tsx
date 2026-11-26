@@ -3,10 +3,9 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { BrandHeader } from "./Visual";
 import { Button, colors, styles as shared } from "./ui";
 
-export function Welcome({wide,busy,onDemo,onLogin,onRegister}:{
+export function Welcome({wide,onDemo,onLogin,onRegister}:{
   wide:boolean;
-  busy:boolean;
-  onDemo:()=>void;
+  onDemo:(role:"elder"|"caregiver")=>void;
   onLogin:()=>void;
   onRegister:()=>void;
 }) {
@@ -21,11 +20,15 @@ export function Welcome({wide,busy,onDemo,onLogin,onRegister}:{
           <Text style={styles.lead}>
             A pessoa idosa organiza seus remédios e consultas. Quem ela autoriza acompanha a rotina e os pedidos de ajuda.
           </Text>
-          <Button label="Testar demonstração" disabled={busy} onPress={onDemo}/>
+          <Text accessibilityRole="header" style={shared.subtitle}>Demonstração</Text>
           <View style={styles.actions}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Já tenho conta · Entrar" disabled={busy}
+            <Button label="Pessoa idosa" onPress={()=>onDemo("elder")} />
+            <Button label="Cuidador" tone="light" onPress={()=>onDemo("caregiver")} />
+          </View>
+          <View style={styles.actions}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Já tenho conta · Entrar"
               style={styles.link} onPress={onLogin}><Text style={styles.linkText}>Entrar</Text></Pressable>
-            <Pressable accessibilityRole="button" disabled={busy}
+            <Pressable accessibilityRole="button"
               style={styles.link} onPress={onRegister}><Text style={styles.linkText}>Criar conta</Text></Pressable>
           </View>
         </View>

@@ -51,11 +51,11 @@ A ativação da biometria e a entrada na mesma conta após reabrir o aplicativo 
 ## Roteiro da banca — cerca de 90 segundos
 
 1. **0–15 s · O problema.** Apresente o Cuidali como uma forma de manter a autonomia da pessoa idosa e compartilhar o acompanhamento com alguém de confiança. Abra o [site](https://cuidali-production.up.railway.app/) no Safari ou no navegador do computador.
-2. **15–35 s · A rotina de Maria.** Toque em **Testar demonstração**. Mostre uma de duas doses confirmadas, confirme a dose restante e mostre a barra completa.
-3. **35–65 s · O pedido e a resposta.** Use o SOS de exemplo e toque em **Ver como Ana**. Mostre que a confirmação aparece no painel dela, abra **Alertas** e assuma o pedido.
+2. **15–35 s · A rotina de Maria.** Na seção **Demonstração**, toque em **Pessoa idosa**. Mostre uma de duas doses confirmadas e confirme a dose restante.
+3. **35–65 s · O pedido e a resposta.** Use o SOS de exemplo. Saia da demonstração e toque em **Cuidador** na página inicial. Mostre que a confirmação aparece no painel dela, abra **Alertas** e assuma o pedido.
 4. **65–90 s · O que mudou.** Volte para Maria e aponte o nome de Ana no pedido. Mostre o resumo do cuidador se houver tempo.
 
-O roteiro usa dados fictícios da mesma aba. O teste automatizado da visita guiada verifica o progresso das doses, a troca de perfil, a retomada após recarregar e o nome da cuidadora na resposta de SOS. O fluxo com API e banco de teste está em `mobile/tests/flows.spec.ts`.
+O roteiro usa dados fictícios da mesma aba. O teste automatizado verifica a entrada direta nos dois perfis, a retomada após recarregar e o acompanhamento de um alerta. O fluxo com API e banco de teste está em `mobile/tests/flows.spec.ts`.
 
 Para o ensaio em dois aparelhos, use contas fictícias vinculadas num ambiente de teste com API compartilhada. Para o teste de usabilidade, peça a uma pessoa idosa que encontre e confirme uma dose e a um cuidador que encontre e assuma o alerta. Registre o tempo, se houve ajuda e onde cada pessoa hesitou. Esses resultados dependem das sessões com participantes.
 

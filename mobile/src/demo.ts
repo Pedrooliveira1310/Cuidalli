@@ -20,14 +20,12 @@ type Alert = RecordId & {
   kind: "sos" | "pain"; status: "open" | "accepted" | "resolved";
   created_at: string; accepted_name?: string;
 };
-export type GuidedStep = "dose" | "request" | "switch-caregiver" | "accept" | "switch-elder" | "done";
 type Pain = RecordId & {
   view: string; region: string; type: string; intensity: number; onset: string;
   notes: string; created_at: string; views: {name: string; viewed_at: string}[];
 };
 type DemoState = {
   role: Role | null;
-  guide?: GuidedStep;
   users: Record<Role, DemoUser>;
   nextId: number;
   linked: boolean;
@@ -47,9 +45,7 @@ const profiles: Record<Role, DemoUser> = {
   elder: {id:-101,role:"elder",name:"Maria Almeida",email:"maria.cuidali@example.com",phone:"0000000001",birth_date:"1960-05-01"},
   caregiver: {id:-102,role:"caregiver",name:"Ana Silva",email:"ana.cuidali@example.com",phone:"0000000002",birth_date:"1988-04-17"},
 };
-export const browserDemoProfiles = Object.values(profiles).map(({role,email}) => ({role,email}));
 const storageKey = "cuidali.demo.v1";
-const listeners = new Set<() => void>();
 const now = () => new Date().toISOString().slice(0,19).replace("T"," ");
 const dateInSaoPaulo = (utc: string) => new Intl.DateTimeFormat("sv-SE",{
   timeZone:"America/Sao_Paulo",
@@ -96,42 +92,20 @@ function persist(state: DemoState) {
   } catch {
     // The demonstration continues in memory.
   }
-  listeners.forEach(listener=>listener());
-}
-export function subscribeDemo(listener: () => void) {
-  listeners.add(listener);
-  return ()=>{listeners.delete(listener);};
-}
-export function guidedStep() {
-  const state=load();
-  return state?.role ? state.guide ?? null : null;
 }
 export function isBrowserDemo(): boolean {
   return Boolean(load()?.role);
 }
-export function startBrowserDemo(email: string): User {
-  const profile = browserDemoProfiles.find(item => item.email === email);
-  if (!profile) throw new Error("Escolha um dos perfis de demonstração.");
+export function startBrowserDemo(role: Role): User {
   const state = current = load() ?? seed();
-  state.role = profile.role;
-  delete state.guide;
+  state.role = role;
   persist(state);
-  return state.users[profile.role];
-}
-export function startGuidedDemo(): User {
-  const state=current=seed();
-  state.role="elder";
-  state.guide="dose";
-  state.alerts=[];
-  persist(state);
-  return state.users.elder;
+  return state.users[role];
 }
 export function switchDemoProfile(): User {
   const state=load();
   if (!state?.role) throw new Error("Abra um perfil de demonstração.");
   state.role=state.role==="elder" ? "caregiver" : "elder";
-  if (state.guide==="switch-caregiver") state.guide="accept";
-  if (state.guide==="switch-elder") state.guide="done";
   persist(state);
   return state.users[state.role];
 }
@@ -143,7 +117,6 @@ export function endBrowserDemo() {
   const state = load();
   if (state) {
     state.role = null;
-    delete state.guide;
     persist(state);
   }
 }
@@ -329,7 +302,6 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
       if (previous) Object.assign(previous,record);
       else state.doses.unshift(record);
       state.lastActivity={created_at:record.recorded_at};
-      if (state.guide==="dose" && status==="taken") state.guide="request";
       return {message:"Dose registrada."};
     }
     case "sos":
@@ -337,7 +309,6 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
         const created_at=now();
         state.alerts.unshift({id:state.nextId++,kind:"sos",status:"open",created_at});
         state.lastActivity={created_at};
-        if (state.guide==="request") state.guide="switch-caregiver";
         return {message:"Pedido registrado na demonstração."};
       }
       break;
@@ -349,7 +320,6 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
         alert.status=data.status==="resolved" ? "resolved" : "accepted";
         alert.accepted_name=user.name;
       }
-      if (state.guide==="accept" && alert.kind==="sos") state.guide="switch-elder";
       return {message:alert.status==="resolved" ? "Alerta concluído." : "Você assumiu o acompanhamento."};
     }
     case "pains":
