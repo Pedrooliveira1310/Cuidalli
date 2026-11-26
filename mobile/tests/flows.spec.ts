@@ -1,3 +1,4 @@
+import {advanceTo} from "./elder-steps";
 import { test, expect } from "@playwright/test";
 const base = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 test("cadastro, vínculo e cuidados com API e banco reais", async ({
@@ -30,17 +31,12 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     await page.getByLabel(label, { exact: true }).fill(value);
   await page.getByRole("button", { name: "Criar conta", exact: true }).click();
   await expect(
-    page.getByText("Conta criada. Entre com telefone e senha."),
+    page.getByText("Conta criada. Entre com telefone ou e-mail e senha."),
   ).toBeVisible();
   await page.getByLabel("Telefone com DDD", { exact: true }).fill(elderPhone);
   await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
-  await expect(
-    page.getByText("Nenhuma dose prevista para hoje."),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Nenhuma consulta marcada para hoje."),
-  ).toBeVisible();
+  await expect(page.getByText("Nenhum lembrete para hoje.")).toBeVisible();
   const login = await request.post(base + "/auth/login", {
     data: { phone: elderPhone, password },
   });
@@ -125,27 +121,19 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   const progress = page.getByRole("progressbar", { name: "Doses confirmadas" });
   await expect(progress).toHaveAttribute("aria-valuenow", "0");
   await page
-    .getByRole("button", { name: "Ainda não", exact: true })
-    .first()
-    .click();
-  await expect(
-    page.getByText("Ainda não — pode confirmar depois"),
-  ).toBeVisible();
-  await page
     .getByRole("button", { name: "✓ Já tomei", exact: true })
     .first()
     .click();
-  await expect(page.getByText("✓ Já tomou", { exact: true })).toBeVisible();
   await expect(progress).toHaveAttribute("aria-valuenow", "1");
   await page
-    .getByRole("button", { name: "Registros de dores", exact: true })
+    .getByRole("button", { name: "Registrar dor", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Registrar uma dor", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Salvar registro de dor", exact: true })
-    .click();
+  await page.getByTestId("pain-body-map").getByRole("button",{name:"Joelho esquerdo",exact:true}).click();
+  await (await advanceTo(page,page.getByRole("button",{name:/^4(?: ✓)?$/}))).click();
+  await (await advanceTo(page,page.getByRole("button",{name:"Salvar registro de dor",exact:true}))).click();
   await expect(
     page.getByText(
       "Dor registrada. Seus cuidadores podem acompanhar o registro e o alerta.",
@@ -239,8 +227,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await expect(
     page.getByText("Contato SOS E2E (Irmã)", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("5511988887777", { exact: true })).toBeVisible();
-  await expect(page.getByText(/iniciar a ligação/)).toBeVisible();
+  await expect(page.getByRole("button",{name:"Ligar para Contato SOS E2E",exact:true})).toBeVisible();
   await page.screenshot({
     path: "test-results/sos-mobile.png",
     fullPage: true,
@@ -256,12 +243,12 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   const sosCard=caregiver.getByText('Pedido de ajuda',{exact:true}).locator('..');
   await sosCard.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
   await expect(sosCard.getByText(/Em acompanhamento/)).toBeVisible();
-  await page.getByRole('button',{name:'↻ Ver registros mais recentes',exact:true}).click();
+  await page.getByRole('button',{name:'Meus pedidos de ajuda',exact:true}).click();
   await expect(page.getByText('Acompanhado por Cuidador fictício E2E',{exact:true})).toBeVisible({timeout:20000});
   await page.reload();
   await expect(page.getByRole('tab',{name:'Início',exact:true})).toBeVisible();
   await page.getByRole('tab',{name:'Assistente',exact:true}).click();
-  await page.getByRole('button',{name:'Minhas consultas',exact:true}).click();
+  await (await advanceTo(page,page.getByRole('button',{name:'Minhas consultas',exact:true}))).click();
   await expect(page.getByText('Você não tem próximas consultas cadastradas.',{exact:true})).toBeVisible();
   await expect(page.getByText(/previstos para a sprint/i)).toHaveCount(0);
   await page.screenshot({path:'test-results/assistente.png',fullPage:true});

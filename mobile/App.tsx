@@ -481,13 +481,19 @@ function Home({
     const ordered = [...doses].sort((a,b) => Number(a.status === "taken") - Number(b.status === "taken"));
     const today = new Date().toLocaleDateString("pt-BR", {timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long"});
     const spacing = room >= 560 ? 12 : 8;
+    const taken = doses.filter(d => d.status === "taken").length;
     const greeting = (
       <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12}}>
         <View style={{flex:1}}>
           <Text accessibilityRole="header" style={s.title}>Olá, {user.name.split(" ")[0]}</Text>
           <Text style={s.muted}>{today}</Text>
         </View>
-        <BrandMark size={52}/>
+        <Pressable accessibilityRole="button" accessibilityLabel="Atualizar dados"
+          disabled={state.loading} onPress={state.reload}
+          style={{minWidth:44,minHeight:44,alignItems:"center",justifyContent:"center"}}>
+          <Text style={{color:colors.blue,fontSize:25}}>↻</Text>
+        </Pressable>
+        <BrandMark size={44}/>
       </View>
     );
     const perPage = room >= 720 && !landscape ? 2 : 1;
@@ -514,7 +520,11 @@ function Home({
       <View style={{gap:spacing}}>
         <Loading state={state} refresh={false} />
         <Text style={s.subtitle}>Lembretes de hoje</Text>
-        <Text style={s.muted}>{doses.filter(d => d.status === "taken").length} de {doses.length} doses confirmadas</Text>
+        <Text accessibilityRole="progressbar" accessibilityLabel="Doses confirmadas"
+          aria-valuemin={0} aria-valuemax={Math.max(1,doses.length)} aria-valuenow={taken}
+          accessibilityValue={{min:0,max:Math.max(1,doses.length),now:taken}} style={s.muted}>
+          {taken} de {doses.length} doses confirmadas
+        </Text>
         <ElderPages key={`${firstUnconfirmed?.time_id ?? "taken"}:${perPage}`} label="Lembretes">
           {Array.from({length:Math.ceil(cards.length / perPage)}, (_, index) =>
             <View key={index} style={{gap:8}}>
@@ -696,9 +706,21 @@ function Resources({
       setBusy(false);
     }
   }
+  const room = useContext(ElderViewport);
+  const tight = !caregiver && room > 0 && room < 420;
+  const addRecord = canWrite && (<Button
+              label={`Adicionar ${kind === "medications" ? "medicamento" : kind === "appointments" ? "consulta" : "contato"}`}
+              onPress={() => {
+                setMessage("");
+                setEditing({ is_primary: false });
+              }}
+            />);
   return (
     <>
-      <Text style={s.title}>{label}</Text>
+      {!editing && <View style={tight?s.row:{gap:8}}>
+        <Text accessibilityRole="header" style={tight?s.subtitle:s.title}>{label}</Text>
+        {!state.denied && addRecord}
+      </View>}
       {!!message && (
         <Text style={s.text} accessibilityRole="alert">
           {message}
@@ -707,9 +729,9 @@ function Resources({
       {state.denied ? (
         <Loading state={state} refresh={caregiver} />
       ) : editing ? (
-        <Card>
+        <Card flat={tight}>
           {caregiver && <BackButton label="Voltar aos registros" onPress={()=>setEditing(null)} />}
-          <Text style={s.subtitle}>{editing.id ? "Editar" : "Adicionar"}</Text>
+          <Text accessibilityRole="header" style={s.subtitle}>{editing.id ? "Editar" : "Adicionar"} · {label}</Text>
           <Form
             key={editing.id || "new"}
             fields={fields}
@@ -753,15 +775,6 @@ function Resources({
         </Card>
       ) : (
         <>
-          {canWrite && (
-            <Button
-              label={`Adicionar ${kind === "medications" ? "medicamento" : kind === "appointments" ? "consulta" : "contato"}`}
-              onPress={() => {
-                setMessage("");
-                setEditing({ is_primary: false });
-              }}
-            />
-          )}
           <Loading state={state} refresh={caregiver} />
           {state.data?.items.length === 0 && (
             <Text style={s.text}>Nenhum registro cadastrado.</Text>
@@ -777,6 +790,8 @@ function Resources({
                     : undefined
               }
             >
+              <View style={tight?{flexDirection:"row",alignItems:"center",gap:12}:{gap:8}}>
+              <View style={tight?{flex:1,minWidth:0,gap:6}:{gap:8}}>
               <Text style={s.subtitle}>{item.name || item.doctor}</Text>
               {kind === "medications" ? (
                 <>
@@ -810,6 +825,7 @@ function Resources({
                       ? caregiver ? "\n★ Contato principal da pessoa idosa" : "\n★ Contato principal do SOS"
                       : ""}
                   </Text>
+                  <View style={s.row}>
                   {!Number(item.is_primary) && (
                     <Button
                       label={caregiver?"Definir como contato principal":"Usar no SOS"}
@@ -840,12 +856,15 @@ function Resources({
                       setMessage(await callContact(item.phone))
                     }
                   />
+                  </View>
                 </>
               )}
+              </View>
               {canWrite &&
                 !(kind === "medications" && !Number(item.active)) &&
                 !(kind === "appointments" && Number(item.cancelled)) && (
                   <>
+                    <View style={tight?{gap:6}:s.row}>
                     <Button
                       label="Editar"
                       tone="light"
@@ -886,8 +905,10 @@ function Resources({
                         )
                       }
                     />
+                    </View>
                   </>
                 )}
+              </View>
             </Card>
           ))}</ElderPages>
         </>
@@ -985,6 +1006,8 @@ function Pains({ elder, user }: { elder: number; user: User }) {
   const [intimate, setIntimate] = useState(false);
   const [anatomy, setAnatomy] = useState<"male"|"female"|null>(null);
   const {width, height} = useWindowDimensions();
+  const room = useContext(ElderViewport);
+  const regionPageSize = room >= 560 ? 6 : 3;
   const shortWide = height < 460 && width >= 560;
   const path = `/elders/${elder}/pains`,
     state = useData(path),
@@ -1009,6 +1032,9 @@ function Pains({ elder, user }: { elder: number; user: User }) {
       setBusy(false);
     }
   }
+  const selectableRegions = Object.entries(regions).filter(([key]) =>
+    !["penis","scrotum","vulva","perineum","anus"].includes(key) &&
+    (view==="front" ? !["upper_back","lower_back"].includes(key) : !["chest","abdomen"].includes(key)));
   return (
     <FormBusy.Provider value={busy}>
       <>
@@ -1094,13 +1120,9 @@ function Pains({ elder, user }: { elder: number; user: User }) {
               Também é possível selecionar pela lista:
             </Text>
             <ElderPages label="Locais">
-              {Array.from({length:3}, (_, page) => (
+              {Array.from({length:Math.ceil(selectableRegions.length/regionPageSize)}, (_, page) => (
                 <View key={page} style={s.row}>
-                  {Object.entries(regions)
-                    .filter(([key]) => view === "front"
-                      ? !["upper_back", "lower_back"].includes(key)
-                      : !["chest", "abdomen"].includes(key))
-                    .slice(page * 6, page * 6 + 6)
+                  {selectableRegions.slice(page*regionPageSize,(page+1)*regionPageSize)
                     .map(([key, label]) => (
                       <Button key={key} label={(region === key ? "✓ " : "") + label}
                         tone={region === key ? "blue" : "light"} onPress={() => setRegion(key)} />
@@ -1148,14 +1170,16 @@ function Pains({ elder, user }: { elder: number; user: User }) {
 </View>
 <View style={{gap:8}}>
             <Text style={s.subtitle}>Desde quando?</Text>
-            {["Hoje", "Alguns dias", "Mais de 1 semana"].map((o) => (
+            <View style={s.row}>{["Hoje", "Alguns dias", "Mais de 1 semana"].map((o) => (
               <Button
                 key={o}
                 label={(onset === o ? "✓ " : "") + o}
                 tone={onset === o ? "blue" : "light"}
                 onPress={() => setOnset(o)}
               />
-            ))}
+            ))}</View>
+</View>
+<View style={{gap:8}}>
             <Form
               fields={[{ key: "notes", label: "Observação", optional: true }]}
               submit="Salvar registro de dor"
@@ -1266,6 +1290,7 @@ function Links({
   onSelect: (id: number) => void;
   onRemove: (id: number) => void;
 }) {
+  const room = useContext(ElderViewport);
   const state = useData("/links"),
     [code, setCode] = useState<any>(null),
     [message, setMessage] = useState(""),
@@ -1296,7 +1321,7 @@ function Links({
   }
   return (
     <>
-      <Text style={s.title}>Pessoas vinculadas</Text>
+      <Text style={room>0&&room<420?s.subtitle:s.title}>Pessoas vinculadas</Text>
       {user.role==="caregiver" && state.data && <Text style={s.muted}>
         {state.data.items.length === 1 ? "1 pessoa vinculada" : state.data.items.length+" pessoas vinculadas"}
       </Text>}
@@ -1305,37 +1330,7 @@ function Links({
           {message}
         </Text>
       )}
-      {user.role === "elder" ? (
-        <Card>
-          <Text style={s.text}>
-            O código autoriza um cuidador a acompanhar seus registros e
-            gerenciar medicamentos, consultas e contatos. Compartilhe apenas com
-            alguém de confiança.
-          </Text>
-          <Button
-            label="Gerar código por 10 minutos"
-            busy={busy}
-            onPress={generate}
-          />
-          {code && (
-            <>
-              <Text selectable style={s.title}>
-                {code.code}
-              </Text>
-              <Text style={s.text}>
-                Uso único · expira em 10 minutos após a geração. Gerar outro
-                código invalida o anterior.
-              </Text>
-              <Button
-                label="Revogar código"
-                tone="red"
-                disabled={busy}
-                onPress={revoke}
-              />
-            </>
-          )}
-        </Card>
-      ) : (
+      {user.role === "caregiver" && (
         <Card>
           <Text style={s.text}>
             Use um código de cada pessoa idosa para vinculá-la. Seus vínculos anteriores continuam disponíveis.
@@ -1352,11 +1347,25 @@ function Links({
           />
         </Card>
       )}
-      <Loading state={state} />
+      <Loading state={state} refresh={user.role==="caregiver"} />
       {state.data?.items.length === 0 && (
         <Text style={s.text}>Você ainda não possui vínculos.</Text>
       )}
-      <ElderPages label="Vínculo">{state.data?.items.map((u: any) => (
+      <ElderPages label="Vínculos">
+        {user.role==="elder" && <Card key="code">
+          {code ? <>
+            <Text selectable style={s.title}>{code.code}</Text>
+            <Text style={s.muted}>Uso único. Válido por 10 minutos.</Text>
+            <View style={s.row}>
+              <Button label="Revogar código" tone="red" disabled={busy} onPress={revoke} />
+              <Button label="Gerar outro código" tone="light" busy={busy} onPress={generate} />
+            </View>
+          </> : <>
+            <Text style={s.text}>Compartilhe o código somente com um cuidador de confiança.</Text>
+            <Button label="Gerar código por 10 minutos" busy={busy} onPress={generate} />
+          </>}
+        </Card>}
+        {state.data?.items.map((u: any) => (
         <Card key={u.id}>
           <Text style={s.subtitle}>{u.name}</Text>
           {user.role === "caregiver" && (
@@ -1419,6 +1428,7 @@ function SOS({
           <Text style={s.subtitle}>
             {contact.name} ({contact.relationship})
           </Text>
+          <View style={s.row}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`SOS: pedir ajuda a ${contact.name}`}
@@ -1451,6 +1461,7 @@ function SOS({
             <Text style={[s.title, { color: colors.red }]}>☎ SOS</Text>
           </Pressable>
           <Button label={`Ligar para ${contact.name}`} tone="light" onPress={async()=>setMessage(await callContact(contact.phone))} />
+          </View>
         </Card>
       ) : (
         !state.loading &&
@@ -1466,7 +1477,15 @@ function SOS({
           </View>
         )
       )}
-      {!contact && <Button label="Enviar pedido de ajuda aos cuidadores" tone="red" onPress={async()=>{try { const r=await api(`/elders/${elder}/sos`,"POST");setMessage(r.message); } catch(e) {setMessage((e as Error).message);} }} />}
+      {!contact && !state.loading && <Button label="Enviar pedido de ajuda aos cuidadores" tone="red"
+        onPress={() => confirmAction("Enviar pedido de ajuda aos cuidadores?", async () => {
+          try {
+            const result = await api(`/elders/${elder}/sos`, "POST");
+            setMessage(result.message);
+          } catch (error) {
+            setMessage((error as Error).message);
+          }
+        })} />}
       <Button label="Meus pedidos de ajuda" tone="light" onPress={() => setHistory(true)} />
       {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
 
@@ -1486,7 +1505,7 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;care
   const [filter,setFilter]=useState<AlertStatus|"all">("all");
   const items: CareAlert[] = state.data?.items ?? [];
   const filtered = filter==="all" ? items : items.filter(item=>item.status===filter);
-  const visible = showFilters ? filtered : filtered.slice(0,15);
+  const visible = showFilters || !caregiver ? filtered : filtered.slice(0,15);
   useEffect(()=>{const t=setInterval(state.reload,15000);return ()=>clearInterval(t);},[state.reload]);
   const names:Record<string,string>={sos:"Pedido de ajuda",inactivity:"Ausência de atividade",pain:"Novo registro de dor"};
   async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();onUpdated?.();}catch(e){setMessage((e as Error).message);}}
@@ -1552,8 +1571,10 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
       <Button label="Fazer outra pergunta" tone="light" onPress={()=>setLatest(null)} />
     </> : <ElderPages label="Assistente">
       <View key="ask" style={{gap:8}}>    <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
+    <View style={s.row}>
     <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
     <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
+    </View>
 </View>
       {aiOption && <View key="settings" style={{gap:8}}>{aiOption}</View>}
       <View key="shortcuts" style={{gap:8}}><Text style={s.subtitle}>Perguntas rápidas</Text>    <View style={s.row}>

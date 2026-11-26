@@ -1,3 +1,4 @@
+import {advanceTo} from "./elder-steps";
 import { test, expect, Page, Route } from "@playwright/test";
 const base = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 const elder = {
@@ -258,9 +259,7 @@ test("sair offline encerra localmente e informa falha de revogação", async ({
     return false;
   });
   await page.getByRole("tab", { name: "Idoso", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Sair da conta", exact: true })
-    .click();
+  await (await advanceTo(page,page.getByRole("button",{name:"Sair da conta",exact:true}))).click();
   await expect(
     page.getByText(/Não foi possível revogar a sessão no servidor/),
   ).toBeVisible();
@@ -293,7 +292,7 @@ test("remoção de outro vínculo preserva seleção e remoção do atual a limp
 test("idoso remove cuidador e mantém dados próprios", async ({ page }) => {
   await setup(page);
   await open(page, "Vínculos");
-  await page.getByRole("button", { name: "Remover vínculo" }).first().click();
+  await (await advanceTo(page,page.getByRole("button",{name:"Remover vínculo",exact:true}))).click();
   await page.getByRole("tab", { name: "Início", exact: true }).click();
   await expect(
     page.getByText("Remédio protegido", { exact: false }),
@@ -339,7 +338,7 @@ test("mapa preserva abdômen/lombar, observação multilinha e largura móvel", 
   await expect(page.getByText("Local: Lombar", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Frente", exact: true }).click();
   await expect(page.getByText("Local: Abdômen", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Observação", { exact: true })).toHaveJSProperty(
+  await expect(await advanceTo(page,page.getByLabel("Observação", { exact: true }))).toHaveJSProperty(
     "tagName",
     "TEXTAREA",
   );
@@ -372,14 +371,11 @@ test("SOS sem principal abre contatos; interruptor desabilitado durante envio", 
     .getByRole("button", { name: "Adicionar contato", exact: true })
     .click();
   await page.getByLabel("Nome do contato", { exact: true }).fill("Fictício");
-  await page
-    .getByLabel("Telefone com DDD", { exact: true })
-    .fill("11999990000");
-  await page.getByLabel("Parentesco", { exact: true }).fill("Filho");
-  await page.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(
-    page.getByRole("switch", { name: "Contato principal do SOS", exact: true }),
-  ).toBeDisabled();
+  await (await advanceTo(page,page.getByLabel("Telefone com DDD",{exact:true}))).fill("11999990000");
+  await (await advanceTo(page,page.getByLabel("Parentesco",{exact:true}))).fill("Filho");
+  const save = await advanceTo(page,page.getByRole("button",{name:"Salvar",exact:true}));
+  await save.click();
+  await expect(save).toBeDisabled();
   release();
   await expect(page.getByText("Contato salvo.")).toBeVisible();
 });
@@ -437,9 +433,7 @@ test("401 atrasado após saída e novo login não encerra sessão nova", async (
     .click();
   await expect.poll(() => !!release).toBeTruthy();
   await page.getByRole("tab", { name: "Idoso", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Sair da conta", exact: true })
-    .click();
+  await (await advanceTo(page,page.getByRole("button",{name:"Sair da conta",exact:true}))).click();
   await page
     .getByRole("button", { name: "Já tenho conta · Entrar", exact: true })
     .click();

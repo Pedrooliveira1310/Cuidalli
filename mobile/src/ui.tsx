@@ -1,4 +1,4 @@
-import {ElderLayout, ElderPages} from "./ElderPages";
+import {ElderLayout, ElderPages, ElderViewport} from "./ElderPages";
 import React, {
   useState,
   useEffect,
@@ -116,6 +116,8 @@ export function Button({
   disabled?: boolean;
   tone?: "blue" | "red" | "light";
 }) {
+  const room = useContext(ElderViewport);
+  const compact = useContext(ElderLayout) && room > 0 && room < 540;
   const formBusy = useContext(FormBusy);
   disabled = disabled || formBusy;
   const palette = buttonColors[tone];
@@ -128,6 +130,7 @@ export function Button({
       onPress={onPress}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         styles.button,
+        compact && {minHeight:44,paddingHorizontal:12,paddingVertical:8},
         {
           backgroundColor: pressed || hovered ? palette.active : palette.rest,
           opacity: busy || disabled ? 0.6 : 1,
@@ -195,6 +198,8 @@ export function Form({
   onBusyChange?: (busy: boolean) => void;
 }) {
   const elder = useContext(ElderLayout);
+  const room = useContext(ElderViewport);
+  const shortForm = elder && room > 0 && room < 420;
   const [jump, setJump] = useState<{index:number}>();
   const [values, setValues] = useState<Record<string, any>>(() => {
     const v = { ...initial };
@@ -221,13 +226,19 @@ export function Form({
     setErrors((e) => ({ ...e, [key]: "" }));
   }
   const pendingFocus = useRef<string | null>(null);
-  useEffect(() => {
-    if (!busy && pendingFocus.current) {
-      const key = pendingFocus.current;
-      pendingFocus.current = null;
-      (refs.current[key] || refs.current[key + "0"])?.focus();
-    }
-  }, [busy]);
+  function focusPending() {
+    const key = pendingFocus.current;
+    if (busy || !key) return;
+    const field = refs.current[key] || refs.current[key+"0"];
+    if (!field) return;
+    pendingFocus.current = null;
+    field.focus();
+  }
+  useEffect(focusPending, [busy]);
+  function registerInput(key: string, input: {focus: () => void} | null) {
+    refs.current[key] = input;
+    if (input) focusPending();
+  }
   async function save() {
     if (locked.current) return;
     const payload = { ...values },
@@ -305,7 +316,8 @@ export function Form({
     const first = fields.find((f) => issues[f.key]);
     if (first) {
       if (elder) setJump({index:fields.indexOf(first)});
-      (refs.current[first.key] || refs.current[first.key + "0"])?.focus();
+      pendingFocus.current = first.key;
+      focusPending();
       return;
     }
     locked.current = true;
@@ -316,7 +328,9 @@ export function Form({
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Não foi possível salvar.";
-      const field = fields.find((f) => {
+      const currentPassword = /senha atual/i.test(message)
+        ? fields.find(field => field.key === "current_password") : undefined;
+      const field = currentPassword ?? fields.find((f) => {
         const name =
           (
             {
@@ -333,6 +347,7 @@ export function Form({
       });
       if (field) {
         setErrors({ [field.key]: message });
+        if (elder) setJump({index:fields.indexOf(field)});
         pendingFocus.current = field.key;
       } else setError(message);
     } finally {
@@ -374,9 +389,7 @@ export function Form({
       value: String(value ?? ""),
       maxLength: maxOf(f),
       autoComplete,
-      ref: (node: any) => {
-        refs.current[key] = node;
-      },
+      ref: (node: HTMLInputElement | HTMLTextAreaElement | null) => registerInput(key,node),
       style: {
         minHeight: 56,
         border: `${errors[f.key] ? 2 : 1}px solid ${errors[f.key] ? colors.red : "#7B8490"}`,
@@ -393,7 +406,7 @@ export function Form({
     };
     if (Platform.OS === "web")
       return multiline
-        ? React.createElement("textarea", { ...common, rows: 4 })
+        ? React.createElement("textarea", { ...common, rows: shortForm ? 2 : 4 })
         : React.createElement("input", {
             ...common,
             type: f.secure
@@ -409,15 +422,13 @@ export function Form({
           });
     return (
       <TextInput
-        ref={(node) => {
-          refs.current[key] = node;
-        }}
+        ref={(node) => registerInput(key,node)}
         accessibilityLabel={f.label}
         accessibilityState={{ disabled: busy }}
         editable={!busy}
         style={[
           styles.input,
-          multiline && { minHeight: 120, textAlignVertical: "top" },
+          multiline && { minHeight: shortForm ? 68 : 120, textAlignVertical: "top" },
           !!errors[f.key] && { borderColor: colors.red, borderWidth: 2 },
         ]}
         placeholder={f.placeholder}
@@ -501,6 +512,17 @@ export function Form({
             )}
           </View>        ));
   const feedback = !!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>;
+  if (elder && fields.length === 1 && fields[0].key !== "times") return (
+    <FormBusy.Provider value={busy}>
+      <View style={{gap:8}}>
+        {inputs}{feedback}
+        <View style={styles.row}>
+          <Button label={submit} onPress={save} busy={busy} />
+          {onCancel && <Button label="Cancelar" tone="light" onPress={onCancel} disabled={busy} />}
+        </View>
+      </View>
+    </FormBusy.Provider>
+  );
   if (elder) return <FormBusy.Provider value={busy}>
     <ElderPages label="Campo" jump={jump}>
       {inputs}
@@ -540,14 +562,19 @@ export function confirmAction(message: string, action: () => void) {
 export function Card({
   children,
   tone,
+  flat = false,
 }: {
   children: React.ReactNode;
   tone?: "blue" | "yellow";
+  flat?: boolean;
 }) {
+  const room = useContext(ElderViewport);
+  const compact = useContext(ElderLayout) && room > 0 && room < 540;
   return (
     <View
       style={[
-        styles.card,
+        flat ? {gap:8} : styles.card,
+        !flat && compact && {padding:12,gap:8},
         tone && {
           backgroundColor: tone === "blue" ? "#F8FBFF" : "#FFF9ED",
           borderWidth: 1,
