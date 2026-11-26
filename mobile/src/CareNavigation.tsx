@@ -27,7 +27,7 @@ const account: Entry[] = [
   { screen: "Vínculos", label: "Vínculos", icon: "link" },
   { screen: "Meus dados", label: "Meus dados", icon: "person" },
 ];
-const careScreens = [...routine, ...account].map(item => item.screen).concat("Termos de Uso","Política de Privacidade");
+const careScreens = [...routine, ...account].map(item => item.screen);
 const navy = "#12365B";
 const pale = "#D0E3F8";
 const accent = "#8CE1D1";
@@ -37,7 +37,7 @@ function primary(caregiver: boolean): Entry[] {
     { screen: "Início", label: "Início", icon: "home" },
     { screen: "Assistente", label: "Assistente", icon: "chat" },
     caregiver ? { screen: "Alertas", label: "Alertas", icon: "bell" } : { screen: "SOS", label: "SOS", icon: "help" },
-    { screen: "Cuidados", label: caregiver ? "Cuidados" : "Idoso", icon: "grid" },
+    { screen: "Cuidados", label: caregiver ? "Cuidados" : "Idoso", icon: caregiver ? "grid" : "elder" },
   ];
 }
 function isSelected(item: Entry, screen: string) {

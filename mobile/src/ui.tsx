@@ -286,7 +286,7 @@ export function Form({
                   : 1),
           0,
         ) > 72 ||
-          (submit === "Criar conta" && Array.from(raw).length < 8))
+          (f.key === "password" && ["Criar conta","Salvar nova senha"].includes(submit) && Array.from(raw).length < 8))
       )
         issues[f.key] =
           "A senha deve ter ao menos 8 caracteres e no máximo 72 bytes.";
@@ -298,6 +298,8 @@ export function Form({
     )
       issues.end_date =
         "O fim do tratamento deve ser igual ou posterior ao início.";
+    if (fields.some(field => field.key === "confirm_password") && values.confirm_password !== values.password)
+      issues.confirm_password = "As novas senhas não coincidem.";
     setErrors(issues);
     setError(missing ? "Preencha todos os campos obrigatórios." : "");
     const first = fields.find((f) => issues[f.key]);

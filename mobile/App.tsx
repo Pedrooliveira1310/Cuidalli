@@ -1,7 +1,7 @@
 import { ElderLayout, ElderPages, ElderViewport } from "./src/ElderPages";
-import {AppIcon,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
+import {AppIcon,BrandMark,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
 import {CareDrawer,CareSidebar,CareTabs,MenuToggle} from "./src/CareNavigation";
-import {AccountProfile,PasswordRecovery,LegalInformation} from "./src/AccountScreens";
+import {AccountProfile,PasswordRecovery,LegalLink} from "./src/AccountScreens";
 import {DemoGuide} from "./src/DemoGuide";
 import {Welcome} from "./src/Welcome";
 import React, { useEffect, useState, useCallback, useRef, useSyncExternalStore, useContext } from "react";
@@ -119,6 +119,11 @@ const regions: Record<string, string> = {
   right_knee: "Joelho direito",
   left_foot: "Pé esquerdo",
   right_foot: "Pé direito",
+  penis: "Pênis",
+  scrotum: "Escroto",
+  vulva: "Vulva",
+  perineum: "Períneo",
+  anus: "Ânus",
 };
 function useData(path: string, refreshKey = 0) {
   const [data, setData] = useState<any>(null),
@@ -242,7 +247,8 @@ function Auth({onLogin,onScreenChange,wide}:{
   wide:boolean;
 }) {
   useEffect(()=>{if(Platform.OS!=="web")return;const handler=async(e:Event)=>{const value=(e as CustomEvent).detail;if(!value.token){setMessage(value.message);return;}try{await saveToken(value.token);const r=await api("/me");onLogin(r.user);}catch(error){setMessage((error as Error).message);}};window.addEventListener("cuidali-biometric",handler);return()=>window.removeEventListener("cuidali-biometric",handler);},[]);
-  const [recovery,setRecovery]=useState(false),[legal,setLegal]=useState<"terms"|"privacy"|null>(null);
+  const [recovery,setRecovery]=useState(false);
+  const [loginMethod,setLoginMethod]=useState<"phone"|"email">("phone");
   const [role, setRole] = useState<"elder" | "caregiver">("elder"),
     [stage, setStage] = useState<"profile" | "register" | "login">("profile"),
     [message, setMessage] = useState("");
@@ -259,8 +265,8 @@ function Auth({onLogin,onScreenChange,wide}:{
     }).catch(() => {});
     return () => { active = false; };
   }, []);
-  useEffect(()=>{onScreenChange();},[stage,recovery,legal]);
-  async function signIn(credentials: {phone: string; password: string} | {demo_email: string}) {
+  useEffect(()=>{onScreenChange();},[stage,recovery]);
+  async function signIn(credentials: {phone: string; password: string} | {email: string; password: string} | {demo_email: string}) {
     const result = await api<{token: string; user: User}>("/auth/login", "POST", credentials);
     await saveToken(result.token);
     onLogin(result.user);
@@ -278,11 +284,10 @@ function Auth({onLogin,onScreenChange,wide}:{
       setOpeningDemo("");
     }
   }
-  const landing = stage==="profile" && demoProfiles.length>0 && !recovery && !legal;
-  if (recovery || legal) {
+  const landing = stage==="profile" && demoProfiles.length>0 && !recovery;
+  if (recovery) {
     return <View style={[s.card,{width:"100%",maxWidth:560,alignSelf:"center"}]}>
-      {recovery ? <PasswordRecovery onBack={()=>setRecovery(false)}/> :
-        legal && <LegalInformation kind={legal} onBack={()=>setLegal(null)}/>}
+      <PasswordRecovery onBack={()=>setRecovery(false)}/>
     </View>;
   }
   const content = (
@@ -358,7 +363,7 @@ function Auth({onLogin,onScreenChange,wide}:{
               ]}
             >
               <View style={{flexDirection:'row',alignItems:'center',gap:14}}>
-                <View style={{width:50,height:50,borderRadius:17,backgroundColor:role===r?'#D4E3F4':'#EEF3F8',alignItems:'center',justifyContent:'center'}}><AppIcon name={r==='elder'?'person':'shield'} size={28}/></View>
+                <View style={{width:50,height:50,borderRadius:17,backgroundColor:role===r?'#D4E3F4':'#EEF3F8',alignItems:'center',justifyContent:'center'}}><AppIcon name={r==='elder'?'elder':'shield'} size={28}/></View>
                 <View style={{flex:1,gap:7}}><Text style={s.subtitle}>{r==='elder'?'Sou o idoso':'Sou o cuidador(a)'}</Text><Text style={[s.muted,{color:'#415B76'}]}>{r==='elder'?'Meus remédios, consultas e como estou me sentindo.':'Acompanhar quem eu cuido, com sua autorização.'}</Text></View>
                 <View style={{width:26,height:26,borderRadius:13,borderWidth:2,borderColor:role===r?colors.blue:'#B7C6D8',backgroundColor:role===r?colors.blue:'transparent',alignItems:'center',justifyContent:'center'}}>{role===r&&<AppIcon name="check" size={18} color="#FFF"/>}</View>
               </View>
@@ -378,8 +383,7 @@ function Auth({onLogin,onScreenChange,wide}:{
         <>
           <Text style={s.title}>Vamos criar sua conta</Text>
           <Text style={s.text}>
-            Perfil: {role === "elder" ? "idoso" : "cuidador"}. Use seu telefone
-            e uma senha para entrar.
+            Perfil: {role === "elder" ? "idoso" : "cuidador"}. Use telefone ou e-mail e senha para entrar.
           </Text>
           <Form
             key={"register" + role}
@@ -422,7 +426,7 @@ function Auth({onLogin,onScreenChange,wide}:{
                     }
                   : {}),
               });
-              setMessage("Conta criada. Entre com telefone e senha.");
+              setMessage("Conta criada. Entre com telefone ou e-mail e senha.");
               setStage("login");
             }}
           />
@@ -441,13 +445,17 @@ function Auth({onLogin,onScreenChange,wide}:{
         <>
           <Text style={s.title}>Que bom te ver de novo</Text>
           <Text style={s.text}>Entre para acompanhar seus cuidados.</Text>
-          <Form
+          <View style={s.row}>
+            <Button label="Usar telefone" tone={loginMethod==="phone"?"blue":"light"} onPress={()=>setLoginMethod("phone")} />
+            <Button label="Usar e-mail" tone={loginMethod==="email"?"blue":"light"} onPress={()=>setLoginMethod("email")} />
+          </View>
+          <Form key={loginMethod}
             fields={[
-              { key: "phone", label: "Telefone com DDD", phone: true },
-              { key: "password", label: "Senha", secure: true },
+              loginMethod==="phone" ? {key:"phone",label:"Telefone com DDD",phone:true} : {key:"email",label:"E-mail cadastrado"},
+              {key:"password",label:"Senha",secure:true},
             ]}
             submit="Entrar"
-            onSave={v=>signIn({phone:v.phone,password:v.password})}
+            onSave={v=>signIn(loginMethod==="phone"?{phone:v.phone,password:v.password}:{email:v.email,password:v.password})}
           />
           {Platform.OS==="web" && !!window.CuidaliNative?.biometric && <Button label="Entrar com biometria" tone="light" onPress={()=>window.CuidaliNative?.biometric?.(false)} />}
           <Button label="Esqueci minha senha" tone="light" onPress={()=>setRecovery(true)} />
@@ -461,7 +469,9 @@ function Auth({onLogin,onScreenChange,wide}:{
           />
         </>
       )}
-      <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:16,paddingVertical:12}}>{(["terms","privacy"] as const).map(kind=><Pressable key={kind} accessibilityRole="button" disabled={!!openingDemo} onPress={()=>setLegal(kind)} style={{minHeight:48,justifyContent:"center"}}><Text style={{fontSize:16,color:colors.blue,textDecorationLine:"underline"}}>{kind==="terms"?"Termos de Uso":"Política de Privacidade"}</Text></Pressable>)}</View>
+      <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:16}}>
+        <LegalLink kind="terms" /><LegalLink kind="privacy" />
+      </View>
     </>
   );
   if (landing) return <View style={{width:"100%",gap:16}}>{content}</View>;
@@ -531,8 +541,13 @@ function Home({
     const today = new Date().toLocaleDateString("pt-BR", {timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long"});
     const spacing = room >= 560 ? 12 : 8;
     const greeting = (
-      <View><Text accessibilityRole="header" style={s.title}>Olá, {user.name.split(" ")[0]}</Text>
-        <Text style={s.muted}>{today}</Text></View>
+      <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12}}>
+        <View style={{flex:1}}>
+          <Text accessibilityRole="header" style={s.title}>Olá, {user.name.split(" ")[0]}</Text>
+          <Text style={s.muted}>{today}</Text>
+        </View>
+        <BrandMark size={52}/>
+      </View>
     );
     const perPage = room >= 720 && !landscape ? 2 : 1;
     const cards = [
@@ -960,11 +975,12 @@ const bodyMapPoints = [
   ["right_foot", "left_foot", 37, 95],
 ] as const;
 
-function BodyMap({disabled = false, view, region, onSelect}: {
+function BodyMap({disabled = false, view, region, onSelect, onIntimate}: {
   view: string;
   region: string;
   onSelect: (region: string) => void;
   disabled?: boolean;
+  onIntimate: () => void;
 }) {
   const compact = useContext(ElderLayout);
   const room = useContext(ElderViewport);
@@ -972,7 +988,7 @@ function BodyMap({disabled = false, view, region, onSelect}: {
   const shortWide = windowHeight < 460 && windowWidth >= 560;
   const front = view === "front";
   const height = compact
-    ? Math.max(130, Math.min(shortWide ? 250 : 395, (room || 500) - (shortWide ? 145 : 270)))
+    ? Math.max(130, Math.min(shortWide ? 250 : 395, (room || 500) - (shortWide ? 165 : windowHeight >= 640 ? 350 : 316)))
     : 430;
   const width = height * 0.62;
   const hitWidth = Math.min(46, height * 0.145);
@@ -987,6 +1003,14 @@ function BodyMap({disabled = false, view, region, onSelect}: {
         style={{width, height}}
         resizeMode="contain"
       />
+      <Pressable accessibilityRole="button" accessibilityLabel="Região íntima"
+        accessibilityState={{selected:["penis","scrotum","vulva","perineum","anus"].includes(region),disabled}}
+        disabled={disabled} onPress={onIntimate}
+        style={{position:"absolute",left:width/2-hitWidth*.4,top:height*.49-hitHeight/2,
+          width:hitWidth*.8,height:hitHeight,alignItems:"center",justifyContent:"center",zIndex:1}}>
+        <View pointerEvents="none" style={{width:12,height:12,borderRadius:6,borderColor:"#FFF",borderWidth:2,
+          backgroundColor:["penis","scrotum","vulva","perineum","anus"].includes(region)?colors.red:colors.blue}} />
+      </Pressable>
       {bodyMapPoints.map(([frontRegion, backRegion, x, y]) => {
         const key = front ? frontRegion : backRegion;
         const selected = key === region;
@@ -1017,6 +1041,8 @@ function BodyMap({disabled = false, view, region, onSelect}: {
 }
 
 function Pains({ elder, user }: { elder: number; user: User }) {
+  const [intimate, setIntimate] = useState(false);
+  const [anatomy, setAnatomy] = useState<"male"|"female"|null>(null);
   const {width, height} = useWindowDimensions();
   const shortWide = height < 460 && width >= 560;
   const path = `/elders/${elder}/pains`,
@@ -1059,7 +1085,18 @@ function Pains({ elder, user }: { elder: number; user: User }) {
         ) : creating ? (
           <>
             <ElderPages label="Etapa">
-<View style={{gap:8,flexDirection:shortWide?"row":"column",alignItems:shortWide?"center":"stretch"}}>
+{intimate ? <View style={{gap:8}}>
+  <Text accessibilityRole="header" style={s.subtitle}>Região íntima</Text>
+  {view==="front" && <View style={s.row}>
+    <Button label="Masculina" tone={anatomy==="male"?"blue":"light"} onPress={()=>setAnatomy("male")} />
+    <Button label="Feminina" tone={anatomy==="female"?"blue":"light"} onPress={()=>setAnatomy("female")} />
+  </View>}
+  <View style={s.row}>
+    {(view==="back"?["anus"]:anatomy==="male"?["penis","scrotum","perineum"]:anatomy==="female"?["vulva","perineum"]:[])
+      .map(key=><Button key={key} label={regions[key]} onPress={()=>{setRegion(key);setIntimate(false);}} />)}
+  </View>
+  <Button label="Voltar ao corpo" tone="light" onPress={()=>setIntimate(false)} />
+</View> : <View style={{gap:8,flexDirection:shortWide?"row":"column",alignItems:shortWide?"center":"stretch"}}>
           <View style={{gap:8,flex:shortWide?1:undefined}}>
             <Text style={s.subtitle}>Onde dói?</Text>
             <Text style={s.muted} accessibilityLiveRegion="polite">Local: {regions[region]}</Text>
@@ -1074,6 +1111,10 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                   tone={view === v ? "blue" : "light"}
                   onPress={() => {
                     setView(v);
+                    if (v!==view && ["penis","scrotum","vulva","perineum","anus"].includes(region)) {
+                      setRegion(v==="front"?"abdomen":"lower_back");
+                      return;
+                    }
                     if (
                       v !== view &&
                       ["chest", "abdomen", "upper_back", "lower_back"].includes(
@@ -1098,9 +1139,14 @@ function Pains({ elder, user }: { elder: number; user: User }) {
               view={view}
               region={region}
               onSelect={setRegion}
+              onIntimate={()=>setIntimate(true)}
               disabled={busy}
             />
-</View>
+            <Pressable accessibilityRole="button" onPress={()=>setIntimate(true)} disabled={busy}
+              style={{alignSelf:"center",paddingHorizontal:12,minHeight:44,justifyContent:"center"}}>
+              <Text style={{color:colors.blue,fontWeight:"700",textDecorationLine:"underline"}}>Selecionar região íntima</Text>
+            </Pressable>
+</View>}
 <View style={{gap:8}}>
             <Text style={s.subtitle}>Local: {regions[region]}</Text>
             <Text style={s.muted}>
@@ -1270,10 +1316,12 @@ function Pains({ elder, user }: { elder: number; user: User }) {
 }
 function Links({
   user,
+  selectedElder,
   onSelect,
   onRemove,
 }: {
   user: User;
+  selectedElder: number;
   onSelect: (id: number) => void;
   onRemove: (id: number) => void;
 }) {
@@ -1308,6 +1356,9 @@ function Links({
   return (
     <>
       <Text style={s.title}>Pessoas vinculadas</Text>
+      {user.role==="caregiver" && state.data && <Text style={s.muted}>
+        {state.data.items.length === 1 ? "1 pessoa vinculada" : state.data.items.length+" pessoas vinculadas"}
+      </Text>}
       {!!message && (
         <Text accessibilityRole="alert" style={s.text}>
           {message}
@@ -1346,8 +1397,7 @@ function Links({
       ) : (
         <Card>
           <Text style={s.text}>
-            Peça à pessoa idosa que gere e compartilhe um código. Ao usá-lo,
-            você recebe acesso aos cuidados dela.
+            Use um código de cada pessoa idosa para vinculá-la. Seus vínculos anteriores continuam disponíveis.
           </Text>
           <Form
             fields={[{ key: "code", label: "Código de vinculação" }]}
@@ -1370,7 +1420,7 @@ function Links({
           <Text style={s.subtitle}>{u.name}</Text>
           {user.role === "caregiver" && (
             <Button
-              label="Acompanhar esta pessoa"
+              label={Number(u.id)===selectedElder?"Voltar ao painel de "+u.name:"Acompanhar esta pessoa"}
               onPress={() => onSelect(Number(u.id))}
             />
           )}
@@ -1538,9 +1588,16 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;care
 }
 function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;navigate:(tab:string)=>void}) {
   const state=useData(`/elders/${elder}/assistant`),[message,setMessage]=useState(""),[draft,setDraft]=useState(""),[busy,setBusy]=useState(false),[action,setAction]=useState<string|null>(null),[confirmations,setConfirmations]=useState<any[]>([]),[doseDate,setDoseDate]=useState("");
-  const [latest, setLatest] = useState<{reply:string}|null>(null);
+  const [latest, setLatest] = useState<{reply:string; mode?:string}|null>(null);
+  const [useAI, setUseAI] = useState(false);
+  const aiOption = state.data?.ai_available && <Pressable accessibilityRole="switch"
+    accessibilityLabel="Interpretar minhas perguntas com IA" accessibilityState={{checked:useAI}}
+    onPress={()=>setUseAI(value=>!value)} style={{padding:10,backgroundColor:colors.light,borderRadius:12,gap:4}}>
+    <Text style={s.label}>{useAI?"✓ IA ativada":"Ativar IA para interpretar perguntas"}</Text>
+    <Text style={s.muted}>Envia o texto da pergunta à OpenAI. Evite escrever dados pessoais ou de saúde.</Text>
+  </Pressable>;
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
-  async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value});setDraft("");setLatest({reply:r.reply});setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
+  async function ask(value:string){if(busy||!value.trim())return;setBusy(true);setMessage("");try{const r=await api(`/elders/${elder}/assistant`,"POST",{message:value,use_ai:useAI});setDraft("");setLatest({reply:r.reply,mode:r.mode});setAction(r.action);setConfirmations(r.confirmation_doses||[]);setDoseDate(r.date||"");state.reload();speak(r.reply);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
   const actions = <View style={{gap:8}}>
     <ElderPages label="Dose">{confirmations.map((d:any)=><Button key={d.time_id} label={`Confirmar ${d.name} · ${d.time}`} onPress={()=>confirmAction(`Você tomou ${d.name}, ${d.dosage}, da dose das ${d.time}?`,async()=>{try{await api(`/elders/${elder}/doses/${d.time_id}`,"POST",{date:doseDate,status:"taken"});setConfirmations(v=>v.filter(x=>x.time_id!==d.time_id));setMessage("Dose confirmada.");}catch(e){setMessage((e as Error).message);}})} />)}</ElderPages>
     {!!action&&<Button label={'Abrir '+(caregiver&&action==='SOS'?'Alertas':action)} onPress={()=>navigate(action)}/>}
@@ -1549,7 +1606,7 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     <Text style={s.title}>Seu assistente</Text>
     {!!message && <Text accessibilityRole="alert" style={s.error}>{message}</Text>}
     {latest ? <>
-      <Card><Text style={s.text}>{latest.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(latest.reply)} /></Card>
+      <Card>{useAI&&<Text style={s.muted}>{latest.mode==="ai"?"Pergunta interpretada com IA":"Pergunta interpretada pelo Cuidali"}</Text>}<Text style={s.text}>{latest.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(latest.reply)} /></Card>
       {actions}
       <Button label="Fazer outra pergunta" tone="light" onPress={()=>setLatest(null)} />
     </> : <ElderPages label="Assistente">
@@ -1557,6 +1614,7 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
     <Button label="Falar com o assistente" tone="light" disabled={busy} onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
 </View>
+      {aiOption && <View key="settings" style={{gap:8}}>{aiOption}</View>}
       <View key="shortcuts" style={{gap:8}}><Text style={s.subtitle}>Perguntas rápidas</Text>    <View style={s.row}>
       {(caregiver ? ['Remédios de hoje','Próximas consultas','Que dia é hoje?','Ver alertas'] :
         ['Meus remédios','Minhas consultas','Que dia é hoje?','Preciso de ajuda']).map(q=><Button key={q} label={q} tone="light" disabled={busy} onPress={()=>ask(q)} />)}
@@ -1565,7 +1623,7 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.muted}>Resposta</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
     </ElderPages>}
   </>;
-  return <><Text style={s.title}>Seu assistente</Text><Text style={s.text}>Consulte seus medicamentos, consultas e cuidados por texto ou voz.</Text>
+  return <><Text style={s.title}>Seu assistente</Text><Text style={s.text}>Consulte seus medicamentos, consultas e cuidados por texto ou voz.</Text>{aiOption}
     {state.data?.items.map((i:any)=><Card key={i.id}><Text style={s.muted}>Você</Text><Text style={s.text}>{i.content}</Text><Text style={s.muted}>Resposta</Text><Text style={s.text}>{i.reply}</Text><Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>)}
     <Text style={s.label}>Como posso ajudar?</Text><TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" value={draft} onChangeText={setDraft} maxLength={500} multiline />
     <Button label="Enviar" busy={busy} onPress={()=>ask(draft)} />
@@ -1801,6 +1859,7 @@ export default function App() {
       screen = (
         <Links
           user={user}
+          selectedElder={elder}
           onRemove={(id) => {
             if (user.role === "caregiver" && elder === id) setElder(0);
           }}
@@ -1810,7 +1869,6 @@ export default function App() {
           }}
         />
       );
-    else if (["Termos de Uso","Política de Privacidade"].includes(tab)) screen=<LegalInformation kind={tab==="Termos de Uso"?"terms":"privacy"} onBack={goBack} />;
     else if (tab === "Meus dados") screen=<AccountProfile user={user} onSaved={setUser} />;
     else if (tab === "Cuidados" && elderLayout)
       screen = <><Text accessibilityRole="header" style={s.title}>Meu cuidado</Text>
@@ -1820,8 +1878,8 @@ export default function App() {
               <Button key={label} label={label} tone="light" onPress={() => setTab(label)} />)}
           </View>
           <View key="account" style={shortWide?s.row:{gap:8}}>
-            {["Meus dados", "Termos de Uso", "Política de Privacidade"].map(label =>
-              <Button key={label} label={label} tone="light" onPress={() => setTab(label)} />)}
+            <Button label="Meus dados" tone="light" onPress={()=>setTab("Meus dados")} />
+            <View style={s.row}><LegalLink kind="terms" /><LegalLink kind="privacy" /></View>
             <Button label="Avisos neste dispositivo" tone="light" onPress={() => setTab("Avisos")} />
             <Button label={demo ? "Sair da demonstração" : "Sair da conta"} tone="red" busy={logoutBusy} onPress={() => confirmAction("Sair desta conta?", logout)} />
           </View>
@@ -1851,7 +1909,7 @@ export default function App() {
           <MenuRow label="Vínculos" subtitle={caregiver?"Pessoas que você acompanha":"Quem compartilha o cuidado com você"} icon="link" onPress={()=>setTab('Vínculos')}/>
           <Text style={[s.subtitle,{marginTop:12}]}>Sua conta</Text>
           <MenuRow label="Meus dados" subtitle="Perfil, e-mail e entrada com biometria" icon="person" onPress={()=>setTab('Meus dados')}/>
-          <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}><Button label="Termos de Uso" tone="light" onPress={()=>setTab('Termos de Uso')}/><Button label="Política de Privacidade" tone="light" onPress={()=>setTab('Política de Privacidade')}/></View>
+          <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}><LegalLink kind="terms" /><LegalLink kind="privacy" /></View>
           {!demo && <Text style={[s.subtitle,{marginTop:12}]}>Avisos neste dispositivo</Text>}
           {!demo && Platform.OS === "web" && !window.CuidaliNative && typeof Notification !== 'undefined' && <Button label="Ativar avisos neste navegador" tone="light" onPress={async()=>{try { if(!window.CuidaliWebPush) throw new Error("Os avisos ainda estão carregando. Tente novamente em instantes.");const message=await window.CuidaliWebPush.activate(token=>api('/push-tokens','POST',{token,platform:'web'}));setSessionMessage(message); } catch(e) {setSessionMessage((e as Error).message);}}} />}
           {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Ativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(true);setSessionMessage("Acompanhamento ativado neste aparelho.");}} />}
@@ -1979,10 +2037,10 @@ export default function App() {
                   onRestart={()=>loggedIn(startGuidedDemo())}/>}
                 {caregiver && tab !== "Vínculos" && (
                   <View style={{alignSelf:desktop?"flex-end":"stretch"}}>
-                    <Button label="Selecionar outro idoso · Vínculos" tone="light" onPress={() => setTab("Vínculos")} />
+                    <Button label="Trocar ou vincular uma pessoa idosa" tone="light" onPress={() => setTab("Vínculos")} />
                   </View>
                 )}
-                {!["Início","Termos de Uso","Política de Privacidade"].includes(tab) && !(elderLayout && ["Cuidados","SOS","Assistente"].includes(tab)) && <BackButton onPress={goBack} />}
+                {tab !== "Início" && !(elderLayout && ["Cuidados","SOS","Assistente"].includes(tab)) && <BackButton onPress={goBack} />}
                 {!step&&<Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />}
                 {elderLayout && tab !== "Início"
                   ? <View testID="elder-screen" style={{marginVertical:"auto",flexShrink:0,gap:height < 640 ? 8 : 14}}>{screen}</View>

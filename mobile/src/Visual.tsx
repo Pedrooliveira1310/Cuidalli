@@ -25,6 +25,7 @@ const paths:Record<string,string>={
  up:'m5 15 7-7 7 7',
 };
 export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:number;color?:string}){
+ if(name==='elder') return <Image accessible={false} source={require('../assets/prototype/elder.png')} style={{width:size,height:size,tintColor:color}} resizeMode="contain"/>;
  if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
  const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃'};
  return <Text style={{fontSize:size,color}}>{fallback[name]??'+'}</Text>;

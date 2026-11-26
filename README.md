@@ -6,7 +6,7 @@ Site publicado: https://cuidali-production.up.railway.app
 
 ## Recursos
 
-- Cadastro e acesso por telefone e senha, com perfis de pessoa idosa e cuidador.
+- Cadastro e acesso por telefone ou e-mail cadastrado e senha, com perfis de pessoa idosa e cuidador.
 - Vínculos por código temporário e revogável.
 - Medicamentos com vários horários, período de uso e histórico preservado após desativação.
 - Consultas, contatos e escolha do contato principal.
@@ -70,3 +70,9 @@ O protótipo visual foi aplicado à interface. Pessoas idosas podem cadastrar e 
 ## Marca e atualização do site
 
 A logo original está em mobile/assets/prototype/logo.png. Os ícones derivados são gerados pelo script scripts/create-brand-icons.ps1, preservando o símbolo original. Após exportar o Expo para web-export, execute node scripts/publish-web.mjs web-export para atualizar o site preservando favicon, manifesto e notificações.
+
+## Assistente com IA
+
+Defina `OPENAI_API_KEY` no ambiente do backend. O modelo padrão é `gpt-5-mini`, configurável por `OPENAI_ASSISTANT_MODEL`. A opção de IA fica disponível no assistente somente quando a chave está configurada. Cada pessoa decide se quer ativar a interpretação externa. A API recebe o texto da pergunta, sem acesso direto aos registros, e devolve uma intenção validada pelo servidor. As respostas sobre medicamentos e consultas são montadas pelo Cuidali a partir dos registros autorizados. A confirmação de dose exige uma ação explícita. Na indisponibilidade do provedor, o assistente usa as regras locais.
+
+Em **Meus dados → Alterar senha**, a pessoa autenticada pode trocar a senha usando a atual. A recuperação quando a pessoa esqueceu a senha usa e-mail e requer um provedor transacional conforme [Configurar e-mail](docs/CONFIGURAR-EMAIL.md).

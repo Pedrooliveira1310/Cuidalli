@@ -11,7 +11,7 @@ final class Api {
     }
     private function fail(int $status,string $message): never { throw new ApiError($status,$message); }
     private function label(string $key): string {
-        return ['name'=>'nome','phone'=>'telefone','password'=>'senha','birth_date'=>'nascimento','role'=>'perfil','relationship'=>'parentesco','code'=>'código de vinculação','dosage'=>'dosagem','start_date'=>'início do uso','end_date'=>'fim do uso','doctor'=>'médico(a)','specialty'=>'especialidade','location'=>'local','scheduled_at'=>'data e hora da consulta','date'=>'data','status'=>'situação','view'=>'vista do corpo','region'=>'região do corpo','type'=>'tipo de dor','onset'=>'início da dor'][$key] ?? 'campo';
+        return ['name'=>'nome','phone'=>'telefone','password'=>'senha','current_password'=>'senha atual','email'=>'e-mail','birth_date'=>'nascimento','role'=>'perfil','relationship'=>'parentesco','code'=>'código de vinculação','dosage'=>'dosagem','start_date'=>'início do uso','end_date'=>'fim do uso','doctor'=>'médico(a)','specialty'=>'especialidade','location'=>'local','scheduled_at'=>'data e hora da consulta','date'=>'data','status'=>'situação','view'=>'vista do corpo','region'=>'região do corpo','type'=>'tipo de dor','onset'=>'início da dor'][$key] ?? 'campo';
     }
     private function length(string $value): int {
         $count=preg_match_all('/./us',$value);
@@ -19,7 +19,7 @@ final class Api {
     }
     private function text(array $data,string $key,int $max=100): string {
         $value=$data[$key] ?? null;
-        if (!is_string($value) || trim($value)==='' || ($key==='password' ? strlen(trim($value)) : $this->length(trim($value)))>$max) $this->fail(422,"Preencha corretamente: ".$this->label($key).".");
+        if (!is_string($value) || trim($value)==='' || (in_array($key,['password','current_password'],true) ? strlen(trim($value)) : $this->length(trim($value)))>$max) $this->fail(422,"Preencha corretamente: ".$this->label($key).".");
         return trim($value);
     }
     private function phone(array $data,string $key='phone'): string {
@@ -68,11 +68,12 @@ final class Api {
         if ($method==='GET' && $path==='/auth/demo') return ['items'=>$this->demoProfiles($ip)];
         if ($method==='POST' && $path==='/auth/register') return $this->register($data,$ip);
         if ($method==='POST' && $path==='/auth/login') return $this->login($data,$ip);
-        if ($method==='POST' && in_array($path,['/auth/forgot-password','/auth/reset-password'],true)) { $this->rate('recovery:ip:'.$ip,12); $this->rate('recovery:email:'.strtolower(trim((string)($data['email']??''))),8); return (new PasswordRecovery($this->db))->handle($path,$data); }
+        if ($method==='POST' && in_array($path,['/auth/forgot-password','/auth/reset-password'],true)) { $this->rate('recovery:ip:'.$ip,12); $this->rate('recovery:email:'.strtolower(trim(is_string($data['email']??null)?$data['email']:'')),8); return (new PasswordRecovery($this->db))->handle($path,$data); }
         if (!preg_match('/^Bearer ([a-f0-9]{64})$/',$authorization,$m)) $this->fail(401,'Entre novamente para continuar.');
         $hash=hash('sha256',$m[1]);
         $this->user=$this->query('SELECT u.id,u.role,u.name,u.birth_date,u.phone,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP()',[$hash])->fetch() ?: [];
         if (!$this->user) $this->fail(401,'Sessão expirada. Entre novamente.');
+        if ($method==='POST' && $path==='/me/password') return $this->changePassword($data,$hash);
         if ($method==='PATCH' && $path==='/me') return $this->editProfile($data);
         if ($method==='GET' && $path==='/me') return ['user'=>$this->user];
         if ($method==='POST' && $path==='/auth/logout') { $this->query('DELETE FROM sessions WHERE token_hash=?',[$hash]); return ['message'=>'Você saiu da conta.']; }
@@ -80,7 +81,7 @@ final class Api {
         if ($path==='/notifications' && $method==='GET') return $this->notifications();
         if ($path==='/links' && $method==='GET') {
             $elder=$this->user['role']==='elder';
-            return ['items'=>$this->query('SELECT u.id,u.name,u.phone FROM care_links l JOIN users u ON u.id=l.'.($elder?'caregiver_id':'elder_id').' WHERE l.'.($elder?'elder_id':'caregiver_id').'=?',[$this->user['id']])->fetchAll()];
+            return ['items'=>$this->query('SELECT u.id,u.name,u.phone FROM care_links l JOIN users u ON u.id=l.'.($elder?'caregiver_id':'elder_id').' WHERE l.'.($elder?'elder_id':'caregiver_id').'=? ORDER BY u.name, u.id',[$this->user['id']])->fetchAll()];
         }
         if (preg_match('#^/links/(\d+)$#',$path,$m) && $method==='DELETE') {
             $elder=$this->user['role']==='elder';
@@ -143,6 +144,25 @@ final class Api {
         catch(PDOException $e){if(($e->errorInfo[1]??0)===1062)$this->fail(409,'Este telefone ou e-mail já está em uso.');throw $e;}
         return ['message'=>'Seus dados foram atualizados.','user'=>$this->query('SELECT id,role,name,birth_date,phone,email FROM users WHERE id=?',[$this->user['id']])->fetch()];
     }
+    private function changePassword(array $data,string $sessionHash): array {
+        $this->rate('change-password:'.$this->user['id'],8);
+        $current=$this->text($data,'current_password',72);
+        $password=$this->text($data,'password',72);
+        if ($this->length($password)<8) $this->fail(422,'A nova senha deve ter ao menos 8 caracteres e no máximo 72 bytes.');
+        if ($password===$current) $this->fail(422,'Escolha uma senha diferente da atual.');
+        if (!is_string($data['confirm_password']??null) || trim($data['confirm_password'])!==$password) $this->fail(422,'As novas senhas não coincidem.');
+        $id=$this->user['id'];
+        return $this->transaction(function() use ($id,$current,$password,$sessionHash) {
+            $old=$this->query('SELECT password_hash FROM users WHERE id=? FOR UPDATE',[$id])->fetchColumn();
+            if (!$old || !password_verify($current,$old)) $this->fail(403,'Confira sua senha atual.');
+            if (!$this->query('SELECT 1 FROM sessions WHERE token_hash=? AND user_id=? AND expires_at>UTC_TIMESTAMP()',[$sessionHash,$id])->fetchColumn())
+                $this->fail(401,'Sessão expirada. Entre novamente.');
+            $this->query('UPDATE users SET password_hash=? WHERE id=?',[password_hash($password,PASSWORD_DEFAULT),$id]);
+            $this->query('DELETE FROM sessions WHERE user_id=? AND token_hash<>?',[$id,$sessionHash]);
+            $this->query('DELETE FROM password_resets WHERE user_id=?',[$id]);
+            return ['message'=>'Senha alterada. As outras sessões foram encerradas.'];
+        });
+    }
     private function register(array $data,string $ip): array {
         $this->rate('register:'.$ip,20);
         $role=$this->enum($data,'role',['elder','caregiver']); $name=$this->text($data,'name'); $birth=$this->date($data,'birth_date');
@@ -160,7 +180,7 @@ final class Api {
                 $this->query('INSERT INTO users(role,name,birth_date,phone,password_hash,email) VALUES(?,?,?,?,?,?)',[$role,$name,$birth,$phone,password_hash($password,PASSWORD_DEFAULT),$email]);
                 $id=(int)$this->db->lastInsertId();
                 if ($contact) $this->query('INSERT INTO contacts(elder_id,name,phone,relationship,is_primary) VALUES(?,?,?,?,1)',[$id,...$contact]);
-                http_response_code(201); return ['id'=>$id,'message'=>'Conta criada. Entre com telefone e senha.'];
+                http_response_code(201); return ['id'=>$id,'message'=>'Conta criada. Entre com telefone ou e-mail e senha.'];
             });
         } catch(PDOException $e) { if (($e->errorInfo[1]??0)===1062) $this->fail(409,'Este telefone ou e-mail já possui uma conta.'); throw $e; }
     }
@@ -173,14 +193,22 @@ final class Api {
             }
             $data=['phone'=>$profile['phone'],'password'=>demoPassword()];
         }
-        $phone=$this->phone($data); $password=$this->text($data,'password',72);
-        $this->rate('login:ip:'.$ip,40); $this->rate('login:phone:'.$phone,10);
-        $u=$this->query('SELECT * FROM users WHERE phone=?',[$phone])->fetch();
-        $valid=password_verify($password,$u['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');
-        if (!$u || !$valid) $this->fail(401,'Telefone ou senha incorretos.');
-        $token=bin2hex(random_bytes(32)); $hours=max(1,min(720,(int)(getenv('SESSION_HOURS')?:168)));
-        $this->query('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',[hash('sha256',$token),$u['id'],gmdate('Y-m-d H:i:s',time()+$hours*3600)]);
-        unset($u['password_hash']); return ['token'=>$token,'user'=>$u,'expires_in_seconds'=>$hours*3600];
+        $password=$this->text($data,'password',72);
+        $byEmail=array_key_exists('email',$data);
+        $identifier=$byEmail ? $this->email($data) : $this->phone($data);
+        if ($identifier===null) $this->fail(422,'Informe o e-mail cadastrado.');
+        $column=$byEmail ? 'email' : 'phone';
+        $this->rate('login:ip:'.$ip,40);
+        $this->rate('login:'.$column.':'.$identifier,10);
+        return $this->transaction(function () use ($column,$identifier,$password) {
+            $u=$this->query("SELECT * FROM users WHERE $column=? FOR UPDATE",[$identifier])->fetch();
+            $valid=password_verify($password,$u['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');
+            if (!$u || !$valid) $this->fail(401,'Confira seu telefone ou e-mail e a senha.');
+            $token=bin2hex(random_bytes(32)); $hours=max(1,min(720,(int)(getenv('SESSION_HOURS')?:168)));
+            $this->query('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,?)',[hash('sha256',$token),$u['id'],gmdate('Y-m-d H:i:s',time()+$hours*3600)]);
+            unset($u['password_hash']);
+            return ['token'=>$token,'user'=>$u,'expires_in_seconds'=>$hours*3600];
+        });
     }
     private function demoProfiles(string $ip): array {
         if (!demoWebEnabled($ip)) return [];
@@ -278,7 +306,9 @@ final class Api {
         }
         $this->role('elder'); if ($method!=='POST'||$id) $this->fail(405,'Método não permitido.');
         $view=$this->enum($data,'view',['front','back']);
-        $region=$this->enum($data,'region',['head','chest','abdomen','upper_back','lower_back','left_shoulder','right_shoulder','left_arm','right_arm','left_hand','right_hand','left_hip','right_hip','left_leg','right_leg','left_knee','right_knee','left_foot','right_foot']);
+        $region=$this->enum($data,'region',['head','chest','abdomen','upper_back','lower_back','left_shoulder','right_shoulder','left_arm','right_arm','left_hand','right_hand','left_hip','right_hip','left_leg','right_leg','left_knee','right_knee','left_foot','right_foot','penis','scrotum','vulva','perineum','anus']);
+        if ((in_array($region,['penis','scrotum','vulva','perineum'],true) && $view!=='front') || ($region==='anus' && $view!=='back'))
+            $this->fail(422,'Selecione a vista correspondente à região.');
         $type=$this->enum($data,'type',['Pontada','Queimação','Latejante','Aperto / peso','Formigamento','Constante']);
         $intensity=$data['intensity']??null;
         if (!is_int($intensity)||$intensity<1||$intensity>10) $this->fail(422,'Intensidade deve ser um inteiro de 1 a 10.');
@@ -367,7 +397,7 @@ final class Api {
             return ['message'=>$status==='accepted'?'Você assumiu o acompanhamento.':'Alerta concluído.'];
         }
         if ($resource==='assistant') {
-            if ($method==='GET') return ['items'=>array_reverse($this->query('SELECT * FROM assistant_messages WHERE elder_id=? ORDER BY id DESC LIMIT 30',[$elder])->fetchAll())];
+            if ($method==='GET') return ['items'=>array_reverse($this->query('SELECT * FROM assistant_messages WHERE elder_id=? ORDER BY id DESC LIMIT 30',[$elder])->fetchAll()),'ai_available'=>AssistantIntent::available()];
             if ($method!=='POST') $this->fail(405,'Método não permitido.');
             $this->rate('assistant:'.$this->user['id'],60); $message=$this->text($data,'message',500);
             $q=strtolower(strtr($message,['á'=>'a','à'=>'a','â'=>'a','ã'=>'a','é'=>'e','ê'=>'e','í'=>'i','ó'=>'o','ô'=>'o','õ'=>'o','ú'=>'u','ç'=>'c','Á'=>'a','À'=>'a','Â'=>'a','Ã'=>'a','É'=>'e','Ê'=>'e','Í'=>'i','Ó'=>'o','Ô'=>'o','Õ'=>'o','Ú'=>'u','Ç'=>'c'])); $action=null; $confirmationDoses=[];
@@ -375,31 +405,55 @@ final class Api {
             $assistantOptions=$caregiver
                 ? 'Posso consultar medicamentos e consultas da pessoa acompanhada, informar a data e a hora atuais ou abrir Dores e Alertas.'
                 : 'Posso consultar seus medicamentos e consultas, informar a data e a hora atuais ou ajudar a abrir Dores e SOS.';
-            if ($caregiver && preg_match('/\b(sos|socorro|ajuda|emergencia|alertas?)\b/',$q)) {
+            $urgent=preg_match('/\b(sos|socorro|emergencia|urgente)\b|preciso de ajuda/',$q);
+            $aiIntent=(!$urgent && ($data['use_ai']??false)===true) ? AssistantIntent::classify($message) : null;
+            $intent=$urgent ? 'help' : ($aiIntent ?? $this->localAssistantIntent($q,$caregiver));
+            if ($caregiver && $intent==='help') {
                 $reply='Abra Alertas para acompanhar os pedidos de ajuda da pessoa idosa.'; $action='Alertas';
             }
-            elseif (!$caregiver && preg_match('/(sos|socorro|ajuda|emergencia)/',$q)) {
+            elseif (!$caregiver && $intent==='help') {
                 $reply='Abra o SOS para pedir ajuda aos seus cuidadores e ligar para o contato de confiança.'; $action='SOS';
             }
-            elseif (preg_match('/(dor|doendo)/',$q)) { $reply='Você pode registrar onde dói e a intensidade em Dores para compartilhar com seus cuidadores.'; $action='Dores'; }
-            elseif (preg_match('/(ja tomei|tomei o|tomei a|confirmar dose)/',$q)) {
+            elseif ($intent==='pain') { $reply='Você pode registrar onde dói e a intensidade em Dores para compartilhar com seus cuidadores.'; $action='Dores'; }
+            elseif ($intent==='confirm_dose') {
                 if($this->user['role']!=='elder')$this->fail(403,'A confirmação precisa ser feita pela pessoa idosa.');
                 $d=$this->dashboard($elder);$confirmationDoses=array_values(array_filter($d['doses'],fn($x)=>$x['status']!=='taken'));
                 $reply=$confirmationDoses?'Escolha e confirme a dose que você tomou. A confirmação só será registrada quando você confirmar o medicamento e o horário.':'Todas as doses de hoje já estão confirmadas, ou não há dose cadastrada para hoje.';$action='Início';
-            } elseif (preg_match('/(remedio|medica|dose|tomei)/',$q)) {
+            } elseif ($intent==='next_dose') {
+                $dashboard=$this->dashboard($elder); $next=null;
+                foreach ($dashboard['doses'] as $dose) {
+                    if ($dose['status']!=='taken' && $dose['time']>=date('H:i')) { $next=$dose; break; }
+                }
+                $reply=$next ? 'A próxima dose prevista na agenda é '.$next['name'].' '.$next['dosage'].' às '.$next['time'].'.' : 'Não há outra dose prevista no restante do dia.';
+                $action='Medicamentos';
+            } elseif ($intent==='medications') {
                 $d=$this->dashboard($elder); $pending=array_filter($d['doses'],fn($x)=>$x['status']!=='taken');
                 $reply=$pending ? 'Suas doses de hoje ainda sem confirmação: '.implode('; ',array_map(fn($x)=>$x['name'].' '.$x['dosage'].' às '.$x['time'],$pending)).'. Confirme apenas as doses que você tomou.' : 'Não há doses sem confirmação para hoje.'; $action='Medicamentos';
-            } elseif (preg_match('/(consulta|agenda|medico)/',$q)) {
+            } elseif ($intent==='appointments') {
                 $a=$this->query('SELECT * FROM appointments WHERE elder_id=? AND cancelled=0 AND scheduled_at>=UTC_TIMESTAMP() ORDER BY scheduled_at LIMIT 3',[$elder])->fetchAll();
                 $reply=$a ? 'Próximas consultas: '.implode('; ',array_map(fn($x)=>$x['specialty'].' em '.(new DateTimeImmutable($x['scheduled_at'],new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i').' em '.$x['location'],$a)) : 'Você não tem próximas consultas cadastradas.'; $action='Consultas';
-            } elseif (preg_match('/^(?:(?:por favor|oi|ola)[ ,]*)?(?:que (?:dia|horas?) (?:e|sao)(?: hoje| agora)?|qual (?:e )?(?:a data|o dia|o horario|a hora)(?: de hoje| atual)?|hora atual|data de hoje)[?!., ]*$/',$q)) $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
-            elseif(preg_match('/^(oi|ola|bom dia|boa tarde|boa noite|como pode me ajudar|o que voce faz)[?!., ]*$/',$q)) $reply='Olá! '.$assistantOptions.' Como posso ajudar?';
-            else $reply='Não tenho acesso a programação de TV, notícias ou outras informações externas. '.$assistantOptions.' O que você gostaria de consultar?';
+            } elseif ($intent==='clock') $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
+            elseif ($intent==='greeting') $reply='Olá! '.$assistantOptions.' Como posso ajudar?';
+            else $reply='Posso ajudar com a rotina registrada no Cuidali. '.$assistantOptions.' O que você gostaria de consultar?';
             $this->query('INSERT INTO assistant_messages(elder_id,content,reply) VALUES(?,?,?)',[$elder,$message,$reply]);
             if($this->user['role']==='elder') $this->activity($elder,'assistant_used');
-            return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d')];
+            return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d'),'mode'=>$aiIntent===null?'local':'ai'];
         }
         $this->fail(405,'Método não permitido.');
+    }
+
+    private function localAssistantIntent(string $question,bool $caregiver): string {
+        return match (true) {
+            $caregiver && (bool)preg_match('/\balertas?\b/',$question) => 'help',
+            (bool)preg_match('/\b(dor|dores|doendo)\b/',$question) => 'pain',
+            (bool)preg_match('/(ja tomei|tomei o|tomei a|confirmar dose)/',$question) => 'confirm_dose',
+            (bool)preg_match('/(proxim[oa].*(remedio|dose|medicamento))|(remedio|dose|medicamento).*(proxim[oa])/',$question) => 'next_dose',
+            (bool)preg_match('/(remedio|medica|dose|tomei)/',$question) => 'medications',
+            (bool)preg_match('/(consulta|agenda|medico)/',$question) => 'appointments',
+            (bool)preg_match('/^(?:(?:por favor|oi|ola)[ ,]*)?(?:que (?:dia|horas?) (?:e|sao)(?: hoje| agora)?|qual (?:e )?(?:a data|o dia|o horario|a hora)(?: de hoje| atual)?|hora atual|data de hoje)[?!., ]*$/',$question) => 'clock',
+            (bool)preg_match('/^(oi|ola|bom dia|boa tarde|boa noite|como pode me ajudar|o que voce faz)[?!., ]*$/',$question) => 'greeting',
+            default => 'other',
+        };
     }
 
 }

@@ -8,10 +8,11 @@ final class PasswordRecovery {
   if($path==='/auth/forgot-password')return $this->request($email);
   $code=$data['recovery_code']??'';$password=$data['password']??'';if(is_string($password))$password=trim($password);
   if(!is_string($code)||!preg_match('/^\d{6}$/',$code))throw new ApiError(422,'Digite os seis números enviados por e-mail.');
-  if(!is_string($password)||strlen($password)<8||strlen($password)>72)throw new ApiError(422,'Use uma senha de 8 a 72 caracteres.');
+  if(!is_string($password)||preg_match_all('/./us',$password)<8||strlen($password)>72)throw new ApiError(422,'Use uma senha com ao menos 8 caracteres e no máximo 72 bytes.');
   $this->db->beginTransaction();
   try {
-   $q=$this->db->prepare('SELECT r.*,u.email FROM password_resets r JOIN users u ON u.id=r.user_id WHERE u.email=? FOR UPDATE');$q->execute([$email]);$r=$q->fetch();
+   $q=$this->db->prepare('SELECT id FROM users WHERE email=? FOR UPDATE');$q->execute([$email]);$id=$q->fetchColumn();
+   $q=$this->db->prepare('SELECT * FROM password_resets WHERE user_id=? FOR UPDATE');$q->execute([$id?:null]);$r=$q->fetch();
    $valid=$r&&$r['attempts']<5&&strtotime($r['expires_at'].' UTC')>time()&&hash_equals($r['code_hash'],hash('sha256',$email.':'.$code));
    if(!$valid){if($r){$q=$this->db->prepare('UPDATE password_resets SET attempts=attempts+1 WHERE user_id=?');$q->execute([$r['user_id']]);}$this->db->commit();throw new ApiError(422,'Código inválido ou expirado. Solicite um novo código se necessário.');}
    $q=$this->db->prepare('UPDATE users SET password_hash=? WHERE id=?');$q->execute([password_hash($password,PASSWORD_DEFAULT),$r['user_id']]);
@@ -32,7 +33,7 @@ final class PasswordRecovery {
   $url=$brevo?'https://api.brevo.com/v3/smtp/email':'https://api.resend.com/emails';
   $headers=$brevo?"api-key: $key\r\nContent-Type: application/json\r\n":"Authorization: Bearer $key\r\nContent-Type: application/json\r\n";
   $payload=$brevo?['sender'=>['name'=>getenv('MAIL_FROM_NAME')?:'Cuidali','email'=>$from],'to'=>[['email'=>$email]],'subject'=>'Seu código de recuperação Cuidali','textContent'=>$text]:['from'=>$from,'to'=>[$email],'subject'=>'Seu código de recuperação Cuidali','text'=>$text];
-  $context=stream_context_create(['http'=>['method'=>'POST','timeout'=>15,'ignore_errors'=>true,'header'=>$headers,'content'=>json_encode($payload,JSON_UNESCAPED_UNICODE)]]);
+  $context=stream_context_create(['http'=>['method'=>'POST','timeout'=>15,'follow_location'=>0,'ignore_errors'=>true,'header'=>$headers,'content'=>json_encode($payload,JSON_UNESCAPED_UNICODE)]]);
   $result=@file_get_contents($url,false,$context);$status=$http_response_header[0]??'';
   if($result===false||!preg_match('/\s2\d\d\s/',$status)){$q=$this->db->prepare('DELETE FROM password_resets WHERE user_id=? AND code_hash=?');$q->execute([$id,hash('sha256',$email.':'.$code)]);throw new ApiError(503,'Não foi possível enviar o e-mail agora. Tente novamente mais tarde.');}
   return $generic;
