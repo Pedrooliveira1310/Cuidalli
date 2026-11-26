@@ -905,77 +905,78 @@ function Resources({
     </>
   );
 }
-function BodyMap({
-  disabled = false,
-  view,
-  region,
-  onSelect,
-}: {
+// Coordinates follow the illustrated figure; left and right refer to the person.
+const bodyMapPoints = [
+  ["head", "head", 50, 8],
+  ["chest", "upper_back", 50, 26],
+  ["abdomen", "lower_back", 50, 37],
+  ["left_shoulder", "right_shoulder", 66, 21],
+  ["right_shoulder", "left_shoulder", 34, 21],
+  ["left_arm", "right_arm", 74, 35],
+  ["right_arm", "left_arm", 26, 35],
+  ["left_hand", "right_hand", 85, 51],
+  ["right_hand", "left_hand", 15, 51],
+  ["left_hip", "right_hip", 61, 46],
+  ["right_hip", "left_hip", 39, 46],
+  ["left_leg", "right_leg", 61, 57],
+  ["right_leg", "left_leg", 39, 57],
+  ["left_knee", "right_knee", 60, 68],
+  ["right_knee", "left_knee", 40, 68],
+  ["left_foot", "right_foot", 63, 95],
+  ["right_foot", "left_foot", 37, 95],
+] as const;
+
+function BodyMap({disabled = false, view, region, onSelect}: {
   view: string;
   region: string;
-  onSelect: (r: string) => void;
+  onSelect: (region: string) => void;
   disabled?: boolean;
 }) {
   const compact = useContext(ElderLayout);
-  const points: [string, number, number][] = [
-    ["head", 45, 2],
-    ["left_shoulder", 66, 22],
-    ["right_shoulder", 24, 22],
-    [view === "front" ? "chest" : "upper_back", 45, 26],
-    [view === "front" ? "abdomen" : "lower_back", 45, 41],
-    ["left_arm", 74, 38],
-    ["right_arm", 16, 38],
-    ["left_hand", 77, 53],
-    ["right_hand", 13, 53],
-    ["left_hip", 56, 55],
-    ["right_hip", 34, 55],
-    ["left_leg", 56, 66],
-    ["right_leg", 34, 66],
-    ["left_knee", 56, 77],
-    ["right_knee", 34, 77],
-    ["left_foot", 56, 89],
-    ["right_foot", 34, 89],
-  ];
-  // Costas espelham a posição visual, mantendo os lados anatômicos do paciente.
+  const front = view === "front";
+  const height = compact ? 218 : 430;
+  const width = height * 0.62;
+  const hitWidth = compact ? 32 : 46;
+  const hitHeight = compact ? 23 : 44;
+
   return (
-    <View
-      style={{ height: compact ? 225 : 460, width: "100%", maxWidth: 280, alignSelf: "center" }}
-    >
-      {points.map(([r, x, y]) => (
-        <Pressable
-          key={r}
-          accessibilityRole="button"
-          accessibilityLabel={regions[r]}
-          disabled={disabled}
-          accessibilityState={{ selected: r === region, disabled }}
-          onPress={() => onSelect(r)}
-          style={{
-            position: "absolute",
-            left: `${view === "front" ? x : 90 - x}%` as any,
-            top: `${y}%` as any,
-            width: compact ? 44 : 56,
-            height: compact ? 32 : 56,
-            marginLeft: -14,
-            marginTop: -5,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
+    <View testID="pain-body-map" style={{width, height, alignSelf:"center"}}>
+      <Image
+        accessible={false}
+        pointerEvents="none"
+        source={front ? require("./assets/brand/mapa-dor-frente.jpg") : require("./assets/brand/mapa-dor-costas.jpg")}
+        style={{width, height}}
+        resizeMode="contain"
+      />
+      {bodyMapPoints.map(([frontRegion, backRegion, x, y]) => {
+        const key = front ? frontRegion : backRegion;
+        const selected = key === region;
+        return (
+          <Pressable
+            key={key}
+            accessibilityRole="button"
+            accessibilityLabel={regions[key]}
+            accessibilityState={{selected, disabled}} aria-pressed={selected}
+            disabled={disabled}
+            onPress={() => onSelect(key)}
             style={{
-              height: compact ? 24 : r === "head" ? 50 : 38,
-              width: compact ? 27 : r === "head" ? 45 : 32,
-              borderRadius: 18,
-              backgroundColor: r === region ? colors.blue : "#CEE1F4",
-              borderWidth: r === region ? 3 : 1,
-              borderColor: colors.blue,
+              position:"absolute", left:width * x / 100 - hitWidth / 2,
+              top:height * y / 100 - hitHeight / 2, width:hitWidth, height:hitHeight,
+              alignItems:"center", justifyContent:"center",
             }}
-          />
-        </Pressable>
-      ))}
+          >
+            <View pointerEvents="none" style={{
+              width:selected ? 16 : 10, height:selected ? 16 : 10, borderRadius:10,
+              backgroundColor:selected ? colors.red : colors.blue,
+              borderColor:"#FFF", borderWidth:2,
+            }} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
+
 function Pains({ elder, user }: { elder: number; user: User }) {
   const path = `/elders/${elder}/pains`,
     state = useData(path),
@@ -1003,7 +1004,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
   return (
     <FormBusy.Provider value={busy}>
       <>
-        <Text style={s.title}>Registro de dores</Text>
+        {!creating && <Text style={s.title}>Registro de dores</Text>}
         {!!message && (
           <Text accessibilityRole="alert" style={s.text}>
             {message}
@@ -1019,6 +1020,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
             <ElderPages label="Etapa">
 <View style={{gap:8}}>
             <Text style={s.subtitle}>Onde dói?</Text>
+            <Text style={s.muted} accessibilityLiveRegion="polite">Local: {regions[region]}</Text>
             <View style={s.row}>
               {[
                 ["front", "Frente"],
