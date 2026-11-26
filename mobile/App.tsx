@@ -384,11 +384,19 @@ function Auth({onLogin,onScreenChange,wide}:{
         </>
       ) : (
         <>
-          <Text style={s.title}>Que bom te ver de novo</Text>
-          <Text style={s.text}>Entre para acompanhar seus cuidados.</Text>
-          <View style={s.row}>
-            <Button label="Usar telefone" tone={loginMethod==="phone"?"blue":"light"} onPress={()=>setLoginMethod("phone")} />
-            <Button label="Usar e-mail" tone={loginMethod==="email"?"blue":"light"} onPress={()=>setLoginMethod("email")} />
+          <Text accessibilityRole="header" style={s.title}>Entrar no Cuidali</Text>
+          <View style={{flexDirection:"row",gap:4,padding:4,borderRadius:14,backgroundColor:"#E9F0F3"}}>
+            {(["phone","email"] as const).map(method=>{
+              const selected=loginMethod===method;
+              const label=method==="phone"?"Usar telefone":"Usar e-mail";
+              return <Pressable key={method} accessibilityRole="button" aria-pressed={selected}
+                onPress={()=>setLoginMethod(method)}
+                style={({pressed})=>({flex:1,minWidth:0,minHeight:44,paddingHorizontal:6,alignItems:"center",
+                  justifyContent:"center",borderRadius:10,borderWidth:1,
+                  borderColor:selected?"#C7D9E2":"transparent",backgroundColor:selected?"#FFF":pressed?"#DDE8EC":"transparent"})}>
+                <Text style={{fontSize:16,textAlign:"center",fontWeight:selected?"800":"600",color:colors.dark}}>{label}</Text>
+              </Pressable>;
+            })}
           </View>
           <Form key={loginMethod}
             fields={[
@@ -399,15 +407,15 @@ function Auth({onLogin,onScreenChange,wide}:{
             onSave={v=>signIn(loginMethod==="phone"?{phone:v.phone,password:v.password}:{email:v.email,password:v.password})}
           />
           {Platform.OS==="web" && !!window.CuidaliNative?.biometric && <Button label="Entrar com biometria" tone="light" onPress={()=>window.CuidaliNative?.biometric?.(false)} />}
-          <Button label="Esqueci minha senha" tone="light" onPress={()=>setRecovery(true)} />
-          <Button
-            label="Não tenho conta · Criar conta"
-            tone="light"
-            onPress={() => {
-              setMessage("");
-              setStage("profile");
-            }}
-          />
+          <View style={{flexDirection:"row",gap:12,flexWrap:"wrap",justifyContent:"space-between"}}>
+            <Pressable accessibilityRole="button" style={{minHeight:44,justifyContent:"center"}} onPress={()=>setRecovery(true)}>
+              <Text style={{fontSize:16,color:colors.blue,fontWeight:"700"}}>Esqueci minha senha</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Não tenho conta · Criar conta"
+              style={{minHeight:44,justifyContent:"center"}} onPress={()=>{setMessage("");setStage("profile");}}>
+              <Text style={{fontSize:16,color:colors.blue,fontWeight:"700"}}>Criar conta</Text>
+            </Pressable>
+          </View>
         </>
       )}
       <View style={{flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:16}}>
@@ -442,6 +450,7 @@ function Home({
   const state = useData(`/elders/${elder}/dashboard`, doseRevision),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
+  const [activitySettingsOpen,setActivitySettingsOpen]=useState(false);
   const caregiver = user.role === "caregiver";
   const pendingAlerts = state.data?.alerts?.filter((alert:CareAlert)=>alert.status==="open").length ?? 0;
   const appointmentsToday = state.data?.appointments.length ?? 0;
@@ -483,17 +492,21 @@ function Home({
     const spacing = room >= 560 ? 12 : 8;
     const taken = doses.filter(d => d.status === "taken").length;
     const greeting = (
-      <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12}}>
+      <View style={{flexDirection:"row",alignItems:"center",gap:10,backgroundColor:"#E8F4F0",
+        borderRadius:18,paddingHorizontal:12,paddingVertical:room < 540 ? 6 : 12}}>
+        <BrandMark size={room < 540 ? 36 : 44}/>
         <View style={{flex:1}}>
-          <Text accessibilityRole="header" style={s.title}>Olá, {user.name.split(" ")[0]}</Text>
-          <Text style={s.muted}>{today}</Text>
+          <Text accessibilityRole="header" style={[s.title,room < 540 && {fontSize:25,lineHeight:30}]}>Olá, {user.name.split(" ")[0]}</Text>
+          <Text style={[s.muted,{color:"#385D58"},room < 540 && {fontSize:14,lineHeight:19}]}>
+            {today.charAt(0).toUpperCase()+today.slice(1)}
+          </Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Atualizar dados"
           disabled={state.loading} onPress={state.reload}
-          style={{minWidth:44,minHeight:44,alignItems:"center",justifyContent:"center"}}>
+          style={({pressed})=>({minWidth:44,minHeight:44,alignItems:"center",justifyContent:"center",borderRadius:12,
+            backgroundColor:pressed?"#CFE7DE":"#F7FCFA"})}>
           <Text style={{color:colors.blue,fontSize:25}}>↻</Text>
         </Pressable>
-        <BrandMark size={44}/>
       </View>
     );
     const perPage = room >= 720 && !landscape ? 2 : 1;
@@ -501,9 +514,11 @@ function Home({
       ...ordered.map(d => <View key={"dose-"+d.time_id}>
           <Card tone="blue">
             <View style={{flexDirection:"row", alignItems:"center", gap:12}}>
-              <Image source={require("./assets/prototype/pills.png")} style={{width:38,height:38}} resizeMode="contain" />
-              <View style={{flex:1}}><Text style={s.subtitle}>{d.time} · {d.name}</Text>
-                <Text style={s.muted}>{d.dosage} · {statusLabel[d.status]}</Text></View>
+              <View style={{alignItems:"center",justifyContent:"center",borderRadius:12,backgroundColor:"#E1ECF7",width:58,minHeight:49}}>
+                <Text style={{fontSize:17,fontWeight:"800",color:colors.blue}}>{d.time}</Text>
+              </View>
+              <View style={{flex:1}}><Text style={s.subtitle}>{d.name}</Text>
+                <Text style={[s.muted,d.status==="taken"&&{color:colors.green}]}>{d.dosage} · {statusLabel[d.status]}</Text></View>
             </View>
             {d.status !== "taken" && <Button label="✓ Já tomei" busy={busy}
               disabled={state.loading || !!state.error} onPress={() => dose(d.time_id, "taken")} />}
@@ -520,11 +535,14 @@ function Home({
       <View style={{gap:spacing}}>
         <Loading state={state} refresh={false} />
         <Text style={s.subtitle}>Lembretes de hoje</Text>
-        <Text accessibilityRole="progressbar" accessibilityLabel="Doses confirmadas"
+        {!!doses.length && <Text accessibilityRole="progressbar" accessibilityLabel="Doses confirmadas"
           aria-valuemin={0} aria-valuemax={Math.max(1,doses.length)} aria-valuenow={taken}
           accessibilityValue={{min:0,max:Math.max(1,doses.length),now:taken}} style={s.muted}>
           {taken} de {doses.length} doses confirmadas
-        </Text>
+        </Text>}
+        {!!doses.length && room >= 540 && <View style={{height:6,borderRadius:6,backgroundColor:"#DDE8ED",overflow:"hidden"}}>
+          <View style={{height:6,width:`${taken / doses.length * 100}%`,backgroundColor:colors.green}} />
+        </View>}
         <ElderPages key={`${firstUnconfirmed?.time_id ?? "taken"}:${perPage}`} label="Lembretes">
           {Array.from({length:Math.ceil(cards.length / perPage)}, (_, index) =>
             <View key={index} style={{gap:8}}>
@@ -551,7 +569,7 @@ function Home({
       </View>
     );
     return (
-      <View style={{flexGrow:1,justifyContent:"space-between",gap:spacing}}>
+      <View style={{flexGrow:1,justifyContent:room >= 620?"center":"space-between",gap:room >= 620 ? 24 : spacing}}>
         {greeting}
         {reminders}
         {actions}
@@ -575,45 +593,60 @@ function Home({
       )}
       {state.data && (
         <>
-          {caregiver && (
-            <Card>
+          <View style={{flexDirection:wide?"row":"column",alignItems:"flex-start",gap:16}}>
+          <View style={{flex:wide?1.1:undefined,width:wide?undefined:"100%",minWidth:0,gap:12}}>
+            <View style={{gap:10}}>
               <Text accessibilityRole="header" style={s.subtitle}>Acompanhamento de hoje</Text>
-              <Text style={s.muted}>
-                {state.data.last_activity
-                  ? `Última atividade do idoso: ${dateTime(state.data.last_activity.created_at)}`
-                  : "Ainda não há atividade registrada pelo idoso."}
-              </Text>
               <View style={[s.row,{alignItems:"stretch"}]}>
                 <MenuTile label={pendingAlerts===1?"1 alerta aguardando":pendingAlerts+" alertas aguardando"}
-                  actionLabel="Ver alertas do cuidado" subtitle="Ver pedidos e respostas"
+                  actionLabel="Ver alertas do cuidado" subtitle="Pedidos e respostas"
                   icon="bell" warm={pendingAlerts>0} onPress={()=>navigate("Alertas")}/>
                 <MenuTile label={appointmentsToday===1?"1 consulta hoje":appointmentsToday+" consultas hoje"}
-                  actionLabel="Abrir agenda de cuidados" subtitle="Ver agenda da pessoa idosa"
+                  actionLabel="Abrir agenda de cuidados" subtitle="Agenda da pessoa idosa"
                   icon="calendar" onPress={()=>navigate("Consultas")}/>
               </View>
+            </View>
+            <Alerts elder={elder} caregiver onUpdated={state.reload} onOpenAll={()=>navigate("Alertas")} />
+            <Card>
+              <Text accessibilityRole="header" style={s.subtitle}>Atividade</Text>
+              <Text style={s.muted}>{state.data.last_activity
+                ? `Último registro em ${dateTime(state.data.last_activity.created_at)}`
+                : "Ainda não há atividade registrada pela pessoa idosa."}</Text>
+              <Pressable accessibilityRole="button" accessibilityState={{expanded:activitySettingsOpen}}
+                onPress={()=>setActivitySettingsOpen(value=>!value)}
+                style={{alignSelf:"flex-start",minHeight:44,justifyContent:"center"}}>
+                <Text style={{fontSize:16,color:colors.blue,fontWeight:"700"}}>
+                  {activitySettingsOpen?"Fechar configurações de atividade":"Configurar aviso de inatividade"}
+                </Text>
+              </Pressable>
+              {activitySettingsOpen && <Form
+                fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]}
+                submit="Salvar acompanhamento" onSave={async v=>{
+                  await api(`/elders/${elder}/settings`,"PATCH",{inactivity_hours:Number(v.inactivity_hours)});
+                  setMessage("Acompanhamento atualizado.");
+                  setActivitySettingsOpen(false);
+                  state.reload();
+                }} />}
             </Card>
-          )}
-          {user.role === "caregiver" && <Alerts elder={elder} caregiver onUpdated={state.reload} />}
-          {user.role === "caregiver" && <Card><Text style={s.subtitle}>Acompanhamento de atividade</Text><Form fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]} submit="Salvar acompanhamento" onSave={async v=>{await api(`/elders/${elder}/settings`,"PATCH",{inactivity_hours:Number(v.inactivity_hours)});setMessage("Acompanhamento atualizado.");state.reload();}} /></Card>}
-          <Text style={s.subtitle}>Remédios de hoje</Text>
+          </View>
+          <View style={{flex:wide?1:undefined,width:wide?undefined:"100%",minWidth:0,gap:12}}>
+          <Text accessibilityRole="header" style={s.subtitle}>Remédios de hoje</Text>
           {!state.data.doses.length && (
             <Card><Text style={s.text}>Nenhuma dose prevista para hoje.</Text></Card>
           )}
-          {!!state.data.doses.length && <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>{state.data.doses.map((d: any) => (
-            <View key={d.time_id}
-              style={{flexGrow:1,flexBasis:wide?"46%":"100%",minWidth:0}}><Card>
-              <View style={{flexDirection:'row',alignItems:'center',gap:14}}>
-                <View style={{width:52,height:52,borderRadius:15,backgroundColor:colors.light,alignItems:'center',justifyContent:'center'}}>
-                  <Image source={require("./assets/prototype/pills.png")} style={{width:35,height:35}} resizeMode="contain" />
+          {!!state.data.doses.length && <Card>{state.data.doses.map((d: any,index:number) => (
+              <View key={d.time_id} style={{flexDirection:"row",alignItems:"center",gap:12,
+                borderTopWidth:index?1:0,borderColor:"#DDE8EC",paddingTop:index?10:0}}>
+                <View style={{minWidth:56,minHeight:44,borderRadius:11,backgroundColor:colors.light,alignItems:"center",justifyContent:"center"}}>
+                  <Text style={{fontWeight:"800",fontSize:16,color:colors.blue}}>{d.time}</Text>
                 </View>
-                <View style={{flex:1,gap:3}}><Text style={s.subtitle}>{d.time} · {d.name}</Text><Text style={s.text}>{d.dosage}</Text></View>
+                <View style={{flex:1,minWidth:0,gap:2}}>
+                  <Text style={s.label}>{d.name}</Text>
+                  <Text style={[s.muted,d.status==="taken"&&{color:colors.green}]}>{d.dosage} · {statusLabel[d.status]}</Text>
+                </View>
               </View>
-              <View style={{alignSelf:'flex-start',paddingHorizontal:12,paddingVertical:6,borderRadius:20,backgroundColor:d.status==='taken'?'#DFF4EB':'#EAF1F9'}}>
-                <Text style={{fontSize:16,lineHeight:23,fontWeight:'600',color:d.status==='taken'?'#14675C':'#385675'}}>{statusLabel[d.status]}</Text>
-              </View>
-            </Card></View>
-          ))}</View>}
-          <Text style={s.subtitle}>Consultas de hoje</Text>
+          ))}</Card>}
+          <Text accessibilityRole="header" style={s.subtitle}>Consultas de hoje</Text>
           {!state.data.appointments.length && (
             <Card tone="yellow"><Text style={s.text}>Nenhuma consulta marcada para hoje.</Text></Card>
           )}
@@ -633,32 +666,27 @@ function Home({
               }} />
             </Card>
           ))}
-          <Text style={s.subtitle}>Acesso rápido</Text>
+          </View>
+          </View>
+          <Text accessibilityRole="header" style={s.subtitle}>Acesso rápido</Text>
           <View style={{flexDirection:'row',flexWrap:'wrap',gap:14}}>
             <MenuTile label="Medicamentos" actionLabel="Ver todos os medicamentos" subtitle="Horários e doses" icon="pills" onPress={()=>navigate('Medicamentos')}/>
             <MenuTile label="Consultas" actionLabel="Ver próximas consultas" subtitle="Agenda de atendimentos" icon="calendar" warm onPress={()=>navigate('Consultas')}/>
             <MenuTile label="Registros de dores" subtitle={caregiver?"Acompanhe os registros":"Conte como você está se sentindo"} icon="pain" onPress={()=>navigate('Dores')}/>
           </View>
-          {user.role === "caregiver" && (
-            <>
-              <Text style={s.subtitle}>Histórico de doses</Text>
+            <Card>
+              <Text accessibilityRole="header" style={s.subtitle}>Histórico de doses</Text>
               {!state.data.dose_history.length && (
                 <Text style={s.text}>Nenhuma confirmação registrada.</Text>
               )}
-              {state.data.dose_history.map((d: any) => (
-                <Card key={d.id}>
-                  <Text style={s.text}>
-                    {calendarDate(d.dose_date)} · {d.time.slice(0, 5)} ·{" "}
-                    {d.name}
-                    {"\n"}
-                    {statusLabel[d.status]}
-                    {"\n"}Registrado: {dateTime(d.recorded_at)}
-                  </Text>
-                </Card>
+              {state.data.dose_history.map((d: any,index:number) => (
+                <View key={d.id} style={{borderTopWidth:index?1:0,borderColor:"#DDE8EC",paddingTop:index?10:0,gap:2}}>
+                  <Text style={s.label}>{d.name} · {statusLabel[d.status]}</Text>
+                  <Text style={s.muted}>{calendarDate(d.dose_date)} às {d.time.slice(0,5)} · Registro em {dateTime(d.recorded_at)}</Text>
+                </View>
               ))}
-            </>
-          )}
-          <Button label="Atualizar dados" onPress={state.reload} />
+            </Card>
+          <Button label="Atualizar dados" tone="light" onPress={state.reload} />
         </>
       )}
     </>
@@ -1500,12 +1528,14 @@ const alertFilters = [
   {status:"accepted",label:"Em acompanhamento"},
   {status:"resolved",label:"Concluídos"},
 ] as const;
-function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;caregiver:boolean;showFilters?:boolean;onUpdated?:()=>void}) {
+function Alerts({elder,caregiver,showFilters=false,onUpdated,onOpenAll}:{elder:number;caregiver:boolean;showFilters?:boolean;onUpdated?:()=>void;onOpenAll?:()=>void}) {
   const state=useData(`/elders/${elder}/alerts`),[message,setMessage]=useState("");
   const [filter,setFilter]=useState<AlertStatus|"all">("all");
   const items: CareAlert[] = state.data?.items ?? [];
   const filtered = filter==="all" ? items : items.filter(item=>item.status===filter);
-  const visible = showFilters || !caregiver ? filtered : filtered.slice(0,15);
+  const visible = onOpenAll ? filtered.filter(item=>item.status!=="resolved")
+    .sort((a,b)=>Number(b.status==="open")-Number(a.status==="open") || Number(b.kind==="sos")-Number(a.kind==="sos"))
+    .slice(0,3) : filtered;
   useEffect(()=>{const t=setInterval(state.reload,15000);return ()=>clearInterval(t);},[state.reload]);
   const names:Record<string,string>={sos:"Pedido de ajuda",inactivity:"Ausência de atividade",pain:"Novo registro de dor"};
   async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();onUpdated?.();}catch(e){setMessage((e as Error).message);}}
@@ -1529,8 +1559,8 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;care
         })}
       </View>
     )}
-    {state.data&&!filtered.length&&<Text style={s.text}>{filter==="all"?"Nenhum alerta registrado.":"Nenhum alerta com esse status."}</Text>}
-    <ElderPages label="Pedido">{visible.map(a=><Card key={a.id} tone={a.status==='open'?'yellow':undefined}>
+    {state.data&&!visible.length&&<Text style={s.muted}>{onOpenAll?"Nenhum alerta em aberto.":filter==="all"?"Nenhum alerta registrado.":"Nenhum alerta com esse status."}</Text>}
+    <ElderPages label="Pedido">{visible.map(a=><Card key={a.id} tone={a.status==="open"?(a.kind==="sos"?"danger":"yellow"):undefined}>
       <Text style={s.subtitle}>{names[a.kind]}</Text>
       <View style={s.row}>
         <Text style={s.muted}>{dateTime(a.created_at)}</Text>
@@ -1544,12 +1574,53 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated}:{elder:number;care
         {a.status==='open'&&<Button label="Vou acompanhar" onPress={()=>update(a.id,'accepted')} />}
         <Button label="Concluir atendimento" tone={a.status==='open'?'light':'blue'} onPress={()=>confirmAction('Você verificou a situação e deseja concluir este alerta?',()=>update(a.id,'resolved'))} />
       </View>}
-    </Card>)}</ElderPages>{!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}</>;
+    </Card>)}</ElderPages>
+    {onOpenAll && <Pressable accessibilityRole="button" onPress={onOpenAll}
+      style={{alignSelf:"flex-start",minHeight:44,justifyContent:"center"}}>
+      <Text style={{fontSize:16,color:colors.blue,fontWeight:"700"}}>Ver todos os alertas</Text>
+    </Pressable>}
+    {!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}</>;
 }
+function messagePages(text:string,limit:number) {
+  const characters=Array.from(text);
+  const pages:string[]=[];
+  for(let start=0;start<characters.length;) {
+    let end=Math.min(start+limit,characters.length);
+    if(end<characters.length) {
+      for(let boundary=end;boundary>start+limit/2;boundary--) {
+        if (/\s/.test(characters[boundary])) {end=boundary;break;}
+      }
+    }
+    pages.push(characters.slice(start,end).join("").trim());
+    start=end;
+  }
+  return pages.filter(Boolean);
+}
+
+function ChatBubble({text,author,onListen,live=false}:{
+  text:string;author:"Você"|"Cuidali";onListen?:()=>void;live?:boolean
+}) {
+  const own=author==="Você";
+  return <View style={{alignSelf:own?"flex-end":"flex-start",maxWidth:own?"93%":"100%",minWidth:0,
+    paddingHorizontal:13,paddingVertical:9,gap:4,borderWidth:1,borderColor:own?"#CEE5DD":"#D7E4EE",
+    backgroundColor:own?"#E8F4F0":"#F1F6FB",borderRadius:16,borderTopLeftRadius:own?16:5,borderTopRightRadius:own?5:16}}>
+    <Text style={{fontSize:15,fontWeight:"800",color:own?colors.green:colors.blue}}>{author}</Text>
+    <Text style={s.text} accessibilityLiveRegion={live?"polite":undefined}>{text}</Text>
+    {onListen && <Pressable accessibilityRole="button" accessibilityLabel="Ouvir resposta" onPress={onListen}
+      style={({pressed})=>({alignSelf:"flex-start",justifyContent:"center",minHeight:44,paddingHorizontal:8,
+        borderRadius:10,backgroundColor:pressed?"#DCE9F8":"transparent"})}>
+      <Text style={{fontSize:16,fontWeight:"700",color:colors.blue}}>Ouvir resposta</Text>
+    </Pressable>}
+  </View>;
+}
+
 function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;navigate:(tab:string)=>void}) {
   const state=useData(`/elders/${elder}/assistant`),[message,setMessage]=useState(""),[draft,setDraft]=useState(""),[busy,setBusy]=useState(false),[action,setAction]=useState<string|null>(null),[confirmations,setConfirmations]=useState<any[]>([]),[doseDate,setDoseDate]=useState("");
   const [latest, setLatest] = useState<{question:string;reply:string;mode?:string}|null>(null);
   const [previousQuestion,setPreviousQuestion]=useState<string|null>(null);
+  const [visibleHistory,setVisibleHistory]=useState(3);
+  const room=useContext(ElderViewport);
+  const pageLimit=room>0 && room<340?120:room<540?200:320;
   const cleanup=useRef<()=>void>(()=>{});useEffect(()=>()=>cleanup.current(),[]);
   async function ask(value:string) {
     const question=value.trim();
@@ -1576,49 +1647,53 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     <ElderPages label="Dose">{confirmations.map((d:any)=><Button key={d.time_id} label={`Confirmar ${d.name} · ${d.time}`} onPress={()=>confirmAction(`Você tomou ${d.name}, ${d.dosage}, da dose das ${d.time}?`,async()=>{try{await api(`/elders/${elder}/doses/${d.time_id}`,"POST",{date:doseDate,status:"taken"});setConfirmations(v=>v.filter(x=>x.time_id!==d.time_id));setMessage("Dose confirmada.");}catch(e){setMessage((e as Error).message);}})} />)}</ElderPages>
     {!!action&&<Button label={'Abrir '+(caregiver&&action==='SOS'?'Alertas':action)} onPress={()=>navigate(action)}/>}
 </View>;
-  const composer=<View key="ask" style={{gap:8}}>
+  const composer=<View key="ask" style={{gap:9,padding:10,borderRadius:16,borderWidth:1,borderColor:"#D7E4EE",backgroundColor:"#FFF"}}>
     <Text style={s.label}>Como posso ajudar?</Text>
-    <TextInput style={s.input} accessibilityLabel="Mensagem para o assistente" placeholder="Digite sua mensagem" value={draft}
+    <TextInput style={[s.input,{height:room>0&&room<340?56:72,textAlignVertical:"top"}]} accessibilityLabel="Mensagem para o assistente" placeholder="Digite sua mensagem" value={draft}
       onChangeText={setDraft} maxLength={500} multiline editable={!busy} />
-    <View style={s.row}>
-      <Button label="Enviar" busy={busy} disabled={!draft.trim()} onPress={()=>ask(draft)} />
+    <View style={[s.row,{justifyContent:"space-between"}]}>
       <Button label="Falar com o assistente" tone="light" disabled={busy}
         onPress={()=>{cleanup.current();cleanup.current=listen(value=>{setDraft(value);ask(value);},setMessage);}} />
+      <Button label="Enviar" busy={busy} disabled={!draft.trim()} onPress={()=>ask(draft)} />
     </View>
   </View>;
   const history=state.data?.items ?? [];
   const latestInHistory=latest && history.at(-1)?.content===latest.question && history.at(-1)?.reply===latest.reply;
-  const conversation=(latestInHistory?history.slice(0,-1):history).map((i:any)=>
-    <Card key={i.id}><Text style={s.label}>Você</Text><Text style={s.text}>{i.content}</Text>
-      <Text style={s.label}>Cuidali</Text><Text style={s.text}>{i.reply}</Text>
-      <Button label="Ouvir resposta" tone="light" onPress={()=>speak(i.reply)}/></Card>);
-  const reply=latest && <Card>
-    <Text style={s.label}>Cuidali</Text>
-    <Text style={s.text} accessibilityLiveRegion="polite">{latest.reply}</Text>
-    <Button label="Ouvir resposta" tone="light" onPress={()=>speak(latest.reply)} />
-  </Card>;
+  const previousTurns=latestInHistory?history.slice(0,-1):history;
   if (!caregiver) return <>
     <Text style={s.title}>Seu assistente</Text>
     {!!message && <Text accessibilityRole="alert" style={s.error}>{message}</Text>}
     {latest ? <>
       <ElderPages label="Conversa">
-        {reply}
+        {messagePages(latest.reply,pageLimit).map((part,index)=>
+          <ChatBubble key={index} text={part} author="Cuidali" live onListen={index===0?()=>speak(latest.reply):undefined}/>)}
         {latest.mode!=="urgent" && (action || confirmations.length>0) && actions}
       </ElderPages>
       {latest.mode==="urgent" && actions}
       <Button label="Continuar conversa" tone="light" onPress={()=>setLatest(null)} />
     </> : <ElderPages label="Assistente">
       {composer}
-      {conversation.slice().reverse()}
+      {previousTurns.slice().reverse().flatMap((turn:any)=>[
+        ...messagePages(turn.content,pageLimit).map((part,index)=><ChatBubble key={`${turn.id}-question-${index}`} text={part} author="Você"/>),
+        ...messagePages(turn.reply,pageLimit).map((part,index)=><ChatBubble key={`${turn.id}-reply-${index}`} text={part} author="Cuidali"
+          onListen={index===0?()=>speak(turn.reply):undefined}/>)
+      ])}
     </ElderPages>}
   </>;
-  return <><Text style={s.title}>Seu assistente</Text>
-    {conversation}
-    {latest && <><Card><Text style={s.label}>Você</Text><Text style={s.text}>{latest.question}</Text></Card>{reply}</>}
+  return <View style={{width:"100%",maxWidth:760,alignSelf:"center",gap:12}}>
+    <Text accessibilityRole="header" style={s.title}>Seu assistente</Text>
+    {previousTurns.length>visibleHistory && <Button label="Ver mensagens anteriores" tone="light"
+      onPress={()=>setVisibleHistory(value=>value+6)} />}
+    {previousTurns.slice(-visibleHistory).map((turn:any)=><View key={turn.id} style={{gap:6}}>
+      <ChatBubble text={turn.content} author="Você"/>
+      <ChatBubble text={turn.reply} author="Cuidali" onListen={()=>speak(turn.reply)}/>
+    </View>)}
+    {latest && <><ChatBubble text={latest.question} author="Você"/>
+      <ChatBubble text={latest.reply} author="Cuidali" live onListen={()=>speak(latest.reply)}/></>}
     {actions}
     {composer}
     {!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}
-  </>;
+  </View>;
 }
 function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>void;onRecorded:()=>void}) {
   const compact = useWindowDimensions().width < 600;
@@ -1941,7 +2016,7 @@ export default function App() {
     <ElderLayout.Provider value={elderLayout}>
     <ElderViewport.Provider value={elderHeight}>
     <SafeAreaProvider>
-      <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FFF",overflow:"hidden"}]}>
+      <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FAFCFC",overflow:"hidden"}]}>
         <StatusBar style="dark" />
         <View aria-hidden={drawerOpen&&!desktop}
           importantForAccessibility={drawerOpen&&!desktop?"no-hide-descendants":"auto"}

@@ -79,7 +79,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     .getByRole("button", { name: "Concluir vinculação", exact: true })
     .click();
   await expect(
-    caregiver.getByText("Ainda não há atividade registrada pelo idoso."),
+    caregiver.getByText("Ainda não há atividade registrada pela pessoa idosa."),
   ).toBeVisible();
   await expect(caregiver.getByRole("tab", { name: "SOS", exact: true })).toHaveCount(0);
   await expect(caregiver.getByRole("tab", { name: "Alertas", exact: true })).toBeVisible();
@@ -248,7 +248,8 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await page.reload();
   await expect(page.getByRole('tab',{name:'Início',exact:true})).toBeVisible();
   await page.getByRole('tab',{name:'Assistente',exact:true}).click();
-  await (await advanceTo(page,page.getByRole('button',{name:'Minhas consultas',exact:true}))).click();
+  await page.getByRole('textbox',{name:'Mensagem para o assistente'}).fill('Minhas consultas');
+  await page.getByRole('button',{name:'Enviar',exact:true}).click();
   await expect(page.getByText('Você não tem próximas consultas cadastradas.',{exact:true})).toBeVisible();
   await expect(page.getByText(/previstos para a sprint/i)).toHaveCount(0);
   await page.screenshot({path:'test-results/assistente.png',fullPage:true});

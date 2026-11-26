@@ -37,7 +37,7 @@ export const colors = {
   yellow: "#F2D6A2",
   red: "#A62836",
   green: "#14675C",
-  bg: "#F3F6FB",
+  bg: "#F3F7F8",
 };
 export const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.bg },
@@ -59,9 +59,9 @@ export const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#DCE5F1",
+    borderColor: "#D7E3E8",
     gap: 14,
-    boxShadow: "0 5px 18px rgba(18,40,67,0.05)",
+    boxShadow: "0 3px 12px rgba(18,40,67,0.04)",
   },
   button: {
     minHeight: 54,
@@ -565,21 +565,22 @@ export function Card({
   flat = false,
 }: {
   children: React.ReactNode;
-  tone?: "blue" | "yellow";
+  tone?: "blue" | "yellow" | "danger";
   flat?: boolean;
 }) {
   const room = useContext(ElderViewport);
   const compact = useContext(ElderLayout) && room > 0 && room < 540;
+  const palette = {
+    blue: {backgroundColor:"#F8FBFF",borderColor:"#D7E5F8"},
+    yellow: {backgroundColor:"#FFF9ED",borderColor:"#EAD8B4"},
+    danger: {backgroundColor:"#FFF3F2",borderColor:"#E9C4C4"},
+  };
   return (
     <View
       style={[
         flat ? {gap:8} : styles.card,
         !flat && compact && {padding:12,gap:8},
-        tone && {
-          backgroundColor: tone === "blue" ? "#F8FBFF" : "#FFF9ED",
-          borderWidth: 1,
-          borderColor: tone === "blue" ? "#D7E5F8" : "#EAD8B4",
-        },
+        tone && {borderWidth:1,...palette[tone]},
       ]}
     >
       {children}

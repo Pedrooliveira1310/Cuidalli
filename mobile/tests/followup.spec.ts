@@ -16,10 +16,10 @@ test('bem-estar, dores e assistente com interpretação de horários',async({pag
   const received=page.waitForResponse(r=>r.url().endsWith('/assistant')&&r.request().method()==='POST');
   await page.getByRole('button',{name:'Enviar',exact:true}).click();const reply=await(await received).json();
   expect(reply.reply).not.toContain('Agora são');expect(reply.action).toBeNull();
-  await page.getByRole('button',{name:'Fazer outra pergunta',exact:true}).click();
+  await page.getByRole('button',{name:'Continuar conversa',exact:true}).click();
  }
  await page.getByLabel('Mensagem para o assistente',{exact:true}).fill('Que horas são?');
- const clock=page.waitForResponse(r=>r.url().endsWith('/assistant')&&r.request().method()==='POST');await page.getByRole('button',{name:'Enviar',exact:true}).click();expect((await(await clock).json()).reply).toContain('Agora são');await page.getByRole('button',{name:'Fazer outra pergunta',exact:true}).click();
+ const clock=page.waitForResponse(r=>r.url().endsWith('/assistant')&&r.request().method()==='POST');await page.getByRole('button',{name:'Enviar',exact:true}).click();expect((await(await clock).json()).reply).toContain('Agora são');await page.getByRole('button',{name:'Continuar conversa',exact:true}).click();
  await page.getByLabel('Mensagem para o assistente',{exact:true}).fill('Qual o horário da minha consulta?');
  const agenda=page.waitForResponse(r=>r.url().endsWith('/assistant')&&r.request().method()==='POST');await page.getByRole('button',{name:'Enviar',exact:true}).click();expect((await(await agenda).json()).action).toBe('Consultas');
  await expect(page.getByText('Seu assistente',{exact:true})).toHaveCount(1);

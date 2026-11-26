@@ -28,7 +28,7 @@ const account: Entry[] = [
   { screen: "Meus dados", label: "Meus dados", icon: "person" },
 ];
 const careScreens = [...routine, ...account].map(item => item.screen);
-const navy = "#12365B";
+const navy = "#123449";
 const pale = "#D0E3F8";
 const accent = "#8CE1D1";
 
@@ -236,6 +236,6 @@ const styles=StyleSheet.create({
   profileRole:{color:pale,fontSize:13},
   overlay:{flex:1,flexDirection:"row"},
   backdrop:{position:"absolute",top:0,right:0,bottom:0,left:0,backgroundColor:"#071B33A8"},
-  dock:{flexDirection:"row",gap:4,padding:5,backgroundColor:"#FFF",borderTopWidth:1,borderColor:"#DAE4F0"},
-  dockItem:{flex:1,minWidth:0,minHeight:59,alignItems:"center",justifyContent:"center",gap:4,paddingHorizontal:2,borderRadius:13},
+  dock:{flexDirection:"row",gap:4,padding:5,backgroundColor:"#FFF",borderTopWidth:1,borderColor:"#D7E3E8"},
+  dockItem:{flex:1,minWidth:0,minHeight:56,alignItems:"center",justifyContent:"center",gap:4,paddingHorizontal:2,borderRadius:14},
 });

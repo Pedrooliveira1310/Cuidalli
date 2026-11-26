@@ -44,7 +44,7 @@ export function BrandHeader({onProfile,name,large=false,compact=false}:{onProfil
 }
 export function AuthBrandPanel(){
   return (
-    <View style={{width:'43%',minHeight:635,backgroundColor:'#143B66',borderRadius:28,
+    <View style={{width:'43%',minHeight:530,backgroundColor:'#123449',borderRadius:28,
       padding:32,justifyContent:'center',gap:24,overflow:'hidden'}}>
       <View pointerEvents="none" style={{position:'absolute',top:-70,right:-155,
         width:500,height:500,borderRadius:250,borderWidth:70,borderColor:'#FFFFFF0C'}}/>
@@ -74,7 +74,7 @@ export function DayHero({name,date,summary,elderName,wide}:{
   const progress = summary?.total ? Math.round(summary.taken * 100 / summary.total) : 0;
   return (
     <View style={{
-      backgroundColor:'#143B66', padding:wide?32:21, borderRadius:25, gap:20,
+      backgroundColor:'#123449', padding:wide?24:18, borderRadius:21, gap:16,
       flexDirection:wide?'row':'column', alignItems:wide?'center':'stretch', overflow:'hidden',
     }}>
       <View pointerEvents="none" style={{
@@ -94,7 +94,7 @@ export function DayHero({name,date,summary,elderName,wide}:{
         {elderName && <Text style={[s.text,{color:'#D6E8FA'}]}>Acompanhando {elderName}</Text>}
       </View>
       {summary && (
-        <View style={{width:wide?265:'100%',padding:16,borderRadius:16,backgroundColor:'#0A2B50',gap:8}}>
+        <View style={{width:wide?252:'100%',padding:13,borderRadius:14,backgroundColor:'#0B293C',gap:7}}>
           <Text style={{color:'#FFF',fontSize:18,fontWeight:'700',lineHeight:24}}>Medicação de hoje</Text>
           {!!summary.total && (
             <View accessible accessibilityRole="progressbar" accessibilityLabel="Doses confirmadas"
