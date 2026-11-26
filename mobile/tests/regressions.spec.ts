@@ -321,7 +321,7 @@ test("sessão expirada volta à autenticação com mensagem", async ({ page }) =
     page.getByText("Remédio protegido", { exact: false }),
   ).toHaveCount(0);
 });
-test("mapa preserva abdômen/lombar, observação multilinha e largura móvel", async ({
+test("mapa conserva o ponto marcado ao girar, com observação multilinha e largura móvel", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 740 });
@@ -330,14 +330,17 @@ test("mapa preserva abdômen/lombar, observação multilinha e largura móvel", 
   await page
     .getByRole("button", { name: "Registrar uma dor", exact: true })
     .click();
+  await expect(page.getByText("Selecione a região que dói.", {exact:true})).toBeVisible();
   await page
     .getByRole("button", { name: "Abdômen", exact: true })
     .first()
     .click();
   await page.getByRole("button", { name: "Costas", exact: true }).click();
-  await expect(page.getByText("Local: Lombar", { exact: true })).toBeVisible();
+  await expect(page.getByText("Local: Abdômen · Frente", {exact:true})).toBeVisible();
+  await page.getByTestId("pain-body-map").getByRole("button", {name:"Lombar",exact:true}).click();
+  await expect(page.getByText("Local: Lombar", {exact:true})).toBeVisible();
   await page.getByRole("button", { name: "Frente", exact: true }).click();
-  await expect(page.getByText("Local: Abdômen", { exact: true })).toBeVisible();
+  await expect(page.getByText("Local: Lombar · Costas", {exact:true})).toBeVisible();
   await expect(await advanceTo(page,page.getByLabel("Observação", { exact: true }))).toHaveJSProperty(
     "tagName",
     "TEXTAREA",
@@ -378,6 +381,33 @@ test("SOS sem principal abre contatos; interruptor desabilitado durante envio", 
   await expect(save).toBeDisabled();
   release();
   await expect(page.getByText("Contato salvo.")).toBeVisible();
+});
+test("SOS bloqueia outro envio enquanto aguarda a resposta", async ({page}) => {
+  await page.setViewportSize({width:844,height:390});
+  let release!:()=>void;
+  let sent=0;
+  await setup(page,elder,async (route,path)=>{
+    if (path.endsWith("/contacts")) {
+      await route.fulfill({json:{items:[{id:1,name:"Contato de teste",relationship:"Família",phone:"11900000000",is_primary:1}]}});
+      return true;
+    }
+    if (!path.endsWith("/sos") || route.request().method()!=="POST") return false;
+    sent++;
+    await new Promise<void>(resolve=>{release=resolve;});
+    await route.fulfill({json:{message:"Pedido enviado."}});
+    return true;
+  });
+  await page.getByRole("tab",{name:"SOS",exact:true}).click();
+  const button=page.getByRole("button",{name:"SOS: pedir ajuda a Contato de teste"});
+  await button.click();
+  await expect(button).toBeDisabled();
+  await expect.poll(()=>sent).toBe(1);
+  await expect(page.getByRole("button",{name:"Ligar para Contato de teste"})).toBeDisabled();
+  release();
+  await expect(page.getByText("Pedido enviado.",{exact:true})).toBeVisible();
+  await expect(button).toBeEnabled();
+  const overflow=await page.getByTestId("elder-content").evaluate(el=>el.scrollHeight-el.clientHeight);
+  expect(overflow).toBeLessThanOrEqual(2);
 });
 test("retorno à aba e mudança do dia atualizam dados", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-10-23T20:00:00Z") });

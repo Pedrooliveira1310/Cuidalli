@@ -1019,7 +1019,7 @@ function BodyMap({disabled = false, view, region, onSelect, onIntimate}: {
             }}
           >
             <View pointerEvents="none" style={{
-              width:selected ? 16 : 10, height:selected ? 16 : 10, borderRadius:10,
+              width:selected ? 19 : 11, height:selected ? 19 : 11, borderRadius:10,
               backgroundColor:selected ? colors.red : colors.blue,
               borderColor:"#FFF", borderWidth:2,
             }} />
@@ -1041,12 +1041,28 @@ function Pains({ elder, user }: { elder: number; user: User }) {
     state = useData(path),
     [creating, setCreating] = useState(false),
     [view, setView] = useState("front"),
-    [region, setRegion] = useState("left_knee"),
+    [location, setLocation] = useState<{view:string;region:string}|null>(null),
     [type, setType] = useState("Pontada"),
-    [intensity, setIntensity] = useState(4),
+    [intensity, setIntensity] = useState<number|null>(null),
     [onset, setOnset] = useState("Hoje"),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
+  const region=location?.region ?? "";
+  const selectRegion=(region:string)=>setLocation({view,region});
+  const locationLabel=location
+    ? `Local: ${regions[region]}${view!==location.view?(location.view==="front"?" · Frente":" · Costas"):""}`
+    : "Selecione a região que dói.";
+  function startRecord() {
+    setLocation(null);
+    setView("front");
+    setType("Pontada");
+    setIntensity(null);
+    setOnset("Hoje");
+    setIntimate(false);
+    setAnatomy(null);
+    setMessage("");
+    setCreating(true);
+  }
   async function seen(id: number) {
     if (busy) return;
     setBusy(true);
@@ -1073,7 +1089,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
           </Text>
         )}
         {user.role === "elder" && !creating && (
-          <Button label="Registrar uma dor" onPress={() => setCreating(true)} />
+          <Button label="Registrar uma dor" onPress={startRecord} />
         )}{" "}
         {state.denied ? (
           <Loading state={state} refresh={user.role === "caregiver"} />
@@ -1088,13 +1104,13 @@ function Pains({ elder, user }: { elder: number; user: User }) {
   </View>}
   <View style={s.row}>
     {(view==="back"?["anus"]:anatomy==="male"?["penis","scrotum","perineum"]:anatomy==="female"?["vulva","perineum"]:[])
-      .map(key=><Button key={key} label={regions[key]} onPress={()=>{setRegion(key);setIntimate(false);}} />)}
+      .map(key=><Button key={key} label={regions[key]} onPress={()=>{selectRegion(key);setIntimate(false);}} />)}
   </View>
   <Button label="Voltar ao corpo" tone="light" onPress={()=>setIntimate(false)} />
 </View> : <View style={{gap:8,flexDirection:shortWide?"row":"column",alignItems:shortWide?"center":"stretch"}}>
           <View style={{gap:8,flex:shortWide?1:undefined}}>
             <Text style={s.subtitle}>Onde dói?</Text>
-            <Text style={s.muted} accessibilityLiveRegion="polite">Local: {regions[region]}</Text>
+            <Text style={[s.muted,location&&{color:colors.green}]} accessibilityLiveRegion="polite">{locationLabel}</Text>
             <View style={s.row}>
               {[
                 ["front", "Frente"],
@@ -1104,36 +1120,15 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                   key={v}
                   label={(view === v ? "✓ " : "") + l}
                   tone={view === v ? "blue" : "light"}
-                  onPress={() => {
-                    setView(v);
-                    if (v!==view && ["penis","scrotum","vulva","perineum","anus"].includes(region)) {
-                      setRegion(v==="front"?"abdomen":"lower_back");
-                      return;
-                    }
-                    if (
-                      v !== view &&
-                      ["chest", "abdomen", "upper_back", "lower_back"].includes(
-                        region,
-                      )
-                    )
-                      setRegion(
-                        v === "front"
-                          ? region === "lower_back"
-                            ? "abdomen"
-                            : "chest"
-                          : region === "abdomen"
-                            ? "lower_back"
-                            : "upper_back",
-                      );
-                  }}
+                  onPress={() => setView(v)}
                 />
               ))}
             </View>
           </View>
             <BodyMap
               view={view}
-              region={region}
-              onSelect={setRegion}
+              region={location?.view===view?region:""}
+              onSelect={selectRegion}
               onIntimate={()=>setIntimate(true)}
               disabled={busy}
             />
@@ -1143,7 +1138,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
             </Pressable>
 </View>}
 <View style={{gap:8}}>
-            <Text style={s.subtitle}>Local: {regions[region]}</Text>
+            <Text style={s.subtitle}>{locationLabel}</Text>
             <Text style={s.muted}>
               Também é possível selecionar pela lista:
             </Text>
@@ -1152,8 +1147,8 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                 <View key={page} style={s.row}>
                   {selectableRegions.slice(page*regionPageSize,(page+1)*regionPageSize)
                     .map(([key, label]) => (
-                      <Button key={key} label={(region === key ? "✓ " : "") + label}
-                        tone={region === key ? "blue" : "light"} onPress={() => setRegion(key)} />
+                      <Button key={key} label={(region === key && location?.view===view ? "✓ " : "") + label}
+                        tone={region === key && location?.view===view ? "blue" : "light"} onPress={() => selectRegion(key)} />
                     ))}
                 </View>
               ))}
@@ -1180,7 +1175,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
             </View>
 </View>
 <View style={{gap:8}}>
-            <Text style={s.subtitle}>Quanto está doendo? {intensity}/10</Text>
+            <Text style={s.subtitle}>Quanto está doendo?{intensity!==null?` ${intensity}/10`:""}</Text>
             <Text style={s.muted}>
               1–2 leve; 3–4 média; 5–6 forte; 7–8 muito forte; 9–10 máxima. O
               registro não é um diagnóstico.
@@ -1214,9 +1209,11 @@ function Pains({ elder, user }: { elder: number; user: User }) {
               onBusyChange={setBusy}
               onCancel={() => setCreating(false)}
               onSave={async (v) => {
+                if (!location) throw new Error("Escolha o local da dor no mapa ou na lista antes de salvar.");
+                if (intensity===null) throw new Error("Escolha a intensidade da dor de 1 a 10 antes de salvar.");
                 const r = await api(path, "POST", {
-                  view,
-                  region,
+                  view:location.view,
+                  region:location.region,
                   type,
                   intensity,
                   onset,
@@ -1307,6 +1304,25 @@ function Pains({ elder, user }: { elder: number; user: User }) {
     </FormBusy.Provider>
   );
 }
+function CareSubject({elder,onOpen}:{elder:number;onOpen:()=>void}) {
+  const {data}=useData("/links");
+  const current=data?.items?.find((person:{id:number|string})=>Number(person.id)===elder);
+  return <Pressable accessibilityRole="button"
+    accessibilityLabel={current?`Acompanhando ${current.name}. Trocar ou vincular uma pessoa idosa`:"Trocar ou vincular uma pessoa idosa"}
+    onPress={onOpen}
+    style={({pressed})=>({flexDirection:"row",alignItems:"center",gap:10,minHeight:52,
+      paddingHorizontal:12,paddingVertical:7,borderWidth:1,borderColor:"#CFE1DE",borderRadius:13,
+      backgroundColor:pressed?"#DCEFE8":"#F7FBFA"})}>
+    <AppIcon name="elder" size={23} color={colors.green}/>
+    <View style={{flex:1,minWidth:0}}>
+      <Text style={{fontSize:14,lineHeight:18,fontWeight:"700",color:colors.green}}>Pessoa acompanhada</Text>
+      <Text style={s.label} numberOfLines={1}>{current?.name ?? "Selecionar pessoa"}</Text>
+    </View>
+    <Text style={{fontSize:15,fontWeight:"700",color:colors.blue}}>{current?"Trocar":"Vínculos"}</Text>
+    <AppIcon name="chevron" size={16}/>
+  </Pressable>;
+}
+
 function Links({
   user,
   selectedElder,
@@ -1322,7 +1338,11 @@ function Links({
   const state = useData("/links"),
     [code, setCode] = useState<any>(null),
     [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [adding, setAdding] = useState(false);
+  const caregiver=user.role==="caregiver";
+  const linkedPeople:{id:number|string;name:string}[]|undefined=state.data?.items;
+  const showLinkForm=caregiver && (adding || linkedPeople?.length===0);
   async function generate() {
     if (busy) return;
     setBusy(true);
@@ -1349,7 +1369,7 @@ function Links({
   }
   return (
     <>
-      <Text style={room>0&&room<420?s.subtitle:s.title}>Pessoas vinculadas</Text>
+      <Text accessibilityRole="header" style={room>0&&room<420?s.subtitle:s.title}>Pessoas vinculadas</Text>
       {user.role==="caregiver" && state.data && <Text style={s.muted}>
         {state.data.items.length === 1 ? "1 pessoa vinculada" : state.data.items.length+" pessoas vinculadas"}
       </Text>}
@@ -1357,23 +1377,6 @@ function Links({
         <Text accessibilityRole="alert" style={s.text}>
           {message}
         </Text>
-      )}
-      {user.role === "caregiver" && (
-        <Card>
-          <Text style={s.text}>
-            Use um código de cada pessoa idosa para vinculá-la. Seus vínculos anteriores continuam disponíveis.
-          </Text>
-          <Form
-            fields={[{ key: "code", label: "Código de vinculação" }]}
-            submit="Concluir vinculação"
-            onSave={async (v) => {
-              const r = await api("/links/redeem", "POST", v);
-              state.reload();
-              setMessage(r.message);
-              onSelect(Number(r.elder_id));
-            }}
-          />
-        </Card>
       )}
       <Loading state={state} refresh={user.role==="caregiver"} />
       {state.data?.items.length === 0 && (
@@ -1393,13 +1396,19 @@ function Links({
             <Button label="Gerar código por 10 minutos" busy={busy} onPress={generate} />
           </>}
         </Card>}
-        {state.data?.items.map((u: any) => (
-        <Card key={u.id}>
-          <Text style={s.subtitle}>{u.name}</Text>
-          {user.role === "caregiver" && (
+        {linkedPeople?.map(person => (
+        <Card key={person.id} tone={caregiver && Number(person.id)===selectedElder?"blue":undefined}>
+          <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
+            <AppIcon name={caregiver?"elder":"person"} color={colors.green}/>
+            <View style={{flex:1,minWidth:0}}>
+              <Text style={s.subtitle}>{person.name}</Text>
+              {caregiver && Number(person.id)===selectedElder && <Text style={[s.muted,{color:colors.green}]}>Em acompanhamento</Text>}
+            </View>
+          </View>
+          {caregiver && (
             <Button
-              label={Number(u.id)===selectedElder?"Voltar ao painel de "+u.name:"Acompanhar esta pessoa"}
-              onPress={() => onSelect(Number(u.id))}
+              label={Number(person.id)===selectedElder?"Voltar ao painel de "+person.name:"Acompanhar esta pessoa"}
+              onPress={() => onSelect(Number(person.id))}
             />
           )}
           <Button
@@ -1408,13 +1417,13 @@ function Links({
             disabled={busy}
             onPress={() =>
               confirmAction(
-                `Remover vínculo com ${u.name}? O cuidador perderá acesso aos dados.`,
+                `Remover vínculo com ${person.name}? O cuidador perderá acesso aos dados.`,
                 async () => {
                   setBusy(true);
                   try {
-                    await api(`/links/${u.id}`, "DELETE");
+                    await api(`/links/${person.id}`, "DELETE");
                     state.reload();
-                    onRemove(Number(u.id));
+                    onRemove(Number(person.id));
                     setMessage("Vínculo removido.");
                   } catch (e) {
                     setMessage((e as Error).message);
@@ -1427,98 +1436,104 @@ function Links({
           />
         </Card>
       ))}</ElderPages>
+      {caregiver && !showLinkForm && !!linkedPeople?.length &&
+        <Button label="Adicionar vínculo" tone="light" onPress={()=>setAdding(true)}/>}
+      {showLinkForm && <Card>
+        <Text accessibilityRole="header" style={s.subtitle}>Novo vínculo</Text>
+        <Text style={s.muted}>Peça à pessoa idosa o código gerado em Vínculos.</Text>
+        <Form fields={[{key:"code", label:"Código de vinculação"}]} submit="Concluir vinculação"
+          onCancel={linkedPeople?.length?()=>setAdding(false):undefined}
+          onSave={async values=>{
+            const result=await api("/links/redeem","POST",values);
+            state.reload();
+            setMessage(result.message);
+            onSelect(Number(result.elder_id));
+          }}/>
+      </Card>}
     </>
   );
 }
-function SOS({
-  elder,
-  navigate,
-}: {
-  elder: number;
-  navigate: (tab: string) => void;
-}) {
-  const state = useData(`/elders/${elder}/contacts`),
-    [message, setMessage] = useState(""), [history, setHistory] = useState(false);
-  const contact = state.data?.items.find(
-    (c: any) => Number(c.is_primary) === 1,
-  );
-  if (history) return <>
-    <Text style={s.title}>Meus pedidos de ajuda</Text>
-    <Button label="Voltar para o SOS" tone="light" onPress={() => setHistory(false)} />
-    <Alerts elder={elder} caregiver={false} />
-  </>;
-  return (
-    <>
-      <Text style={s.title}>Precisa de ajuda?</Text>
-      <Loading state={state} refresh={false} />
-      {contact ? (
-        <Card>
-          <Text style={s.subtitle}>
-            {contact.name} ({contact.relationship})
-          </Text>
-          <View style={s.row}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`SOS: pedir ajuda a ${contact.name}`}
-            onPress={() =>
-              confirmAction(
-                isBrowserDemo() ? "Registrar um pedido de ajuda de exemplo?" :
-                  `Enviar pedido de ajuda aos cuidadores e ligar para ${contact.name}?`,
-                async () => {
-                  try {
-                    const result = await api(`/elders/${elder}/sos`, "POST");
-                    const detail = isBrowserDemo() ? "" : Platform.OS !== "web" || window.CuidaliNative
-                      ? " " + await callContact(contact.phone) : " Use Ligar para abrir o discador.";
-                    setMessage(result.message + detail);
-                  } catch (e) {
-                    setMessage("Não foi possível registrar o alerta. " + await callContact(contact.phone));
-                  }
-                },
-              )
-            }
-            style={{
-              height: 72,
-              width: 128,
-              borderRadius: 24,
-              backgroundColor: "#FAD5D5",
-              alignSelf: "center",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Text style={[s.title, { color: colors.red }]}>☎ SOS</Text>
-          </Pressable>
-          <Button label={`Ligar para ${contact.name}`} tone="light" onPress={async()=>setMessage(await callContact(contact.phone))} />
-          </View>
-        </Card>
-      ) : (
-        !state.loading &&
-        !state.error && (
-          <View style={{ gap: 12 }}>
-            <Text style={s.text}>
-              Não há contato principal. Cadastre ou escolha um em Contatos.
-            </Text>
-            <Button
-              label="Escolher ou cadastrar contato"
-              onPress={() => navigate("Contatos")}
-            />
-          </View>
-        )
-      )}
-      {!contact && !state.loading && <Button label="Enviar pedido de ajuda aos cuidadores" tone="red"
-        onPress={() => confirmAction("Enviar pedido de ajuda aos cuidadores?", async () => {
-          try {
-            const result = await api(`/elders/${elder}/sos`, "POST");
-            setMessage(result.message);
-          } catch (error) {
-            setMessage((error as Error).message);
-          }
-        })} />}
-      <Button label="Meus pedidos de ajuda" tone="light" onPress={() => setHistory(true)} />
-      {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
+function SOS({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) {
+  const {width,height}=useWindowDimensions();
+  const landscape=height<460 && width>=560;
+  const state=useData(`/elders/${elder}/contacts`);
+  const [message,setMessage]=useState("");
+  const [history,setHistory]=useState(false);
+  const [sending,setSending]=useState(false);
+  const inFlight=useRef(false);
+  const contact=state.data?.items.find((c:any)=>Number(c.is_primary)===1);
+  const demo=isBrowserDemo();
+  const shouldDial=!!contact && !demo && (Platform.OS!=="web" || !!window.CuidaliNative);
 
-    </>
-  );
+  async function sendRequest() {
+    if (inFlight.current) return;
+    inFlight.current=true;
+    setSending(true);
+    setMessage("");
+    try {
+      let status:string;
+      try {
+        const result=await api(`/elders/${elder}/sos`,"POST");
+        status=result.message;
+      } catch (error) {
+        status=(error as Error).message || "Não foi possível enviar o pedido.";
+      }
+      if (shouldDial) status+=" "+await callContact(contact.phone);
+      setMessage(status);
+    } finally {
+      inFlight.current=false;
+      setSending(false);
+    }
+  }
+  function askForHelp() {
+    if (inFlight.current) return;
+    const prompt=demo?"Registrar um pedido de ajuda de exemplo?":shouldDial
+      ? `Avisar seus cuidadores e abrir o discador para ${contact.name}?`
+      : "Enviar pedido de ajuda aos cuidadores?";
+    confirmAction(prompt,sendRequest);
+  }
+  if (history) return <>
+    <Text accessibilityRole="header" style={s.title}>Meus pedidos de ajuda</Text>
+    <Button label="Voltar para o SOS" tone="light" onPress={()=>setHistory(false)} />
+    <Alerts elder={elder} caregiver={false}/>
+  </>;
+  return <>
+    <Text accessibilityRole="header" style={s.title}>Precisa de ajuda?</Text>
+    <Loading state={state} refresh={false}/>
+    <View style={{flexDirection:landscape?"row":"column",gap:10,alignItems:landscape?"flex-start":"stretch"}}>
+    <View style={{flex:landscape?1.15:undefined,minWidth:0}}>
+    {contact ? <Card tone="danger">
+      <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
+        <View style={{backgroundColor:"#FADEDE",width:40,height:40,borderRadius:12,alignItems:"center",justifyContent:"center"}}>
+          <AppIcon name="help" color={colors.red} size={22}/>
+        </View>
+        <View style={{flex:1,minWidth:0}}>
+          <Text style={{fontSize:14,lineHeight:19,color:colors.red,fontWeight:"700"}}>Contato de confiança</Text>
+          <Text style={s.label}>{contact.name} ({contact.relationship})</Text>
+          <Text selectable style={{fontSize:15,lineHeight:20,color:colors.dark}}>{contact.phone}</Text>
+        </View>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`SOS: pedir ajuda a ${contact.name}`}
+        accessibilityState={{busy:sending,disabled:sending}} disabled={sending} onPress={askForHelp}
+        style={({pressed})=>[s.button,{backgroundColor:pressed?"#7F202C":colors.red,opacity:sending ? .7 : 1}]}>
+        {sending?<ActivityIndicator color="#FFF"/>:<Text style={s.buttonText}>Pedir ajuda</Text>}
+      </Pressable>
+      <Button label={`Ligar para ${contact.name}`} tone="light" disabled={sending}
+        onPress={async()=>setMessage(await callContact(contact.phone))}/>
+    </Card> : !state.loading && <View style={{gap:8}}>
+      <Button label="Enviar pedido de ajuda aos cuidadores" tone="red" busy={sending} onPress={askForHelp}/>
+      {!state.error && <>
+        <Text style={s.muted}>Escolha um contato de confiança para poder ligar por aqui.</Text>
+        <Button label="Escolher ou cadastrar contato" tone="light" onPress={()=>navigate("Contatos")}/>
+      </>}
+    </View>}
+    </View>
+    <View style={{flex:landscape?1:undefined,minWidth:0,gap:8}}>
+      <Button label="Meus pedidos de ajuda" tone="light" onPress={()=>setHistory(true)}/>
+      {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
+    </View>
+    </View>
+  </>;
 }
 type AlertStatus = "open" | "accepted" | "resolved";
 type CareAlert = {id:number;kind:string;status:AlertStatus;created_at:string;accepted_name?:string};
@@ -2083,7 +2098,7 @@ export default function App() {
                 )}
                 {caregiver && tab !== "Vínculos" && (
                   <View style={{alignSelf:desktop?"flex-end":"stretch"}}>
-                    <Button label="Trocar ou vincular uma pessoa idosa" tone="light" onPress={() => setTab("Vínculos")} />
+                    <CareSubject elder={elder} onOpen={()=>setTab("Vínculos")}/>
                   </View>
                 )}
                 {tab !== "Início" && !(elderLayout && ["Cuidados","SOS","Assistente"].includes(tab)) && <BackButton onPress={goBack} />}
