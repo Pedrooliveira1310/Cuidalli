@@ -25,6 +25,28 @@ $password=$strong;
 ok(isset(callApi('POST','/auth/login',['email'=>$email,'password'=>$password])['token']),'Senha nova funciona no acesso por e-mail');
 $db->prepare('INSERT INTO rate_limits(bucket,attempts,reset_at) VALUES(?,99,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 15 MINUTE))')->execute([hash('sha256','assistant:'.$elder)]);
 ok(isset(callApi('POST',"/elders/$elder/assistant",['message'=>'Olá'],$et)['reply']),'Assistente ignora bloqueios de 15 minutos gravados pela versão anterior');
+$activity="/elders/$elder/activity";
+$first=callApi('POST',$activity,[],$et);
+$repeat=callApi('POST',$activity,[],$et);
+ok($first['check_in_remaining_seconds']===900 && $repeat['check_in_remaining_seconds']>0 && $repeat['message']!==$first['message'],'Reenvio usa a confirmação existente');
+$countCheckIns=$db->prepare("SELECT COUNT(*) FROM activities WHERE elder_id=? AND action='check_in'");
+$countCheckIns->execute([$elder]);
+ok((int)$countCheckIns->fetchColumn()===1 && callApi('GET',"/elders/$elder/dashboard",[],$et)['check_in_remaining_seconds']>0,'Bloqueio persiste no painel sem duplicar o registro');
+$db->prepare("UPDATE activities SET created_at=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 15 MINUTE) WHERE elder_id=? AND action='check_in'")->execute([$elder]);
+ok(callApi('POST',$activity,[],$et)['message']===$first['message'],'Novo aviso é aceito ao fim de 15 minutos');
+$r=callApi('POST',"/elders/$elder/assistant",['message'=>'Abrir calendário','previous_messages'=>['Como vejo minhas consultas?']],$et);
+ok($r['action']==='Calendário','Assistente abre o calendário da pessoa idosa');
+$cloudflare=AssistantIntent::provider()==='Cloudflare';
+$answer=AssistantIntent::respond('Como deixo a letra maior no celular?', ['Uso um celular Android'], false,
+    function(array $payload) use ($cloudflare): array {
+        $messages=$cloudflare ? $payload['messages'] : $payload['input'];
+        $context=json_decode(end($messages)['content'],true,8,JSON_THROW_ON_ERROR);
+        ok($context['perguntas_recentes']===['Uso um celular Android'],'IA recebe a conversa recente para contextualizar perguntas gerais');
+        $reply=['intent'=>'other','reply'=>'Abra Configurações, procure Tamanho da fonte e ajuste até ficar confortável para ler.'];
+        return $cloudflare ? ['success'=>true,'result'=>['response'=>$reply]]
+            : ['output'=>[['type'=>'message','content'=>[['type'=>'output_text','text'=>json_encode($reply)]]]]];
+    });
+ok($answer['intent']==='other' && str_contains($answer['reply'],'Tamanho da fonte'),'Resposta geral do provedor é usada como conversa');
 $pain=['type'=>'Pontada','intensity'=>4,'onset'=>'Hoje'];
 $abdominal=['view'=>'front','region'=>'abdomen'];
 $back=['view'=>'back','region'=>'lower_back'];

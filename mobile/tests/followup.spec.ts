@@ -6,7 +6,15 @@ test('bem-estar, dores e assistente com interpretação de horários',async({pag
  const registered=await request.post(base+'/auth/register',{data:{role:'elder',name:'Validação do assistente',birth_date:'1960-01-01',phone,email:'assistant'+suffix+'@example.com',password,emergency_contact:{name:'Contato fictício',phone:'11900000000',relationship:'Teste'}}});expect(registered.status()).toBe(201);
  await page.goto('/');await page.getByRole('button',{name:'Já tenho conta · Entrar',exact:true}).click();await page.getByLabel('Telefone com DDD',{exact:true}).fill(phone);await page.getByLabel('Senha',{exact:true}).fill(password);await page.getByRole('button',{name:'Entrar',exact:true}).click();
  await page.getByRole('button',{name:'Estou bem hoje',exact:true}).click();
- await expect(page.getByText('Seu cuidador já pode ver que você está bem hoje.',{exact:true})).toBeVisible();
+ await expect(page.getByRole('alert').filter({hasText:'Seu cuidador já pode ver que você está bem.'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'✓ Aviso enviado',exact:true})).toBeDisabled();
+ await page.reload();
+ await expect(page.getByRole('button',{name:'✓ Aviso enviado',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'Abrir calendário',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Calendário',exact:true})).toBeVisible();
+ await expect(page.getByText('Nenhuma consulta para este dia.',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Próximo mês',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Mês anterior',exact:true})).toBeVisible();
  await page.getByRole('tab',{name:'Idoso',exact:true}).click();await page.getByRole('button',{name:'Dores',exact:true}).click();
  await page.getByRole('button',{name:'Registrar uma dor',exact:true}).click();
  await expect(page.getByTestId('pain-body-map')).toBeVisible();
@@ -28,6 +36,12 @@ test('bem-estar, dores e assistente com interpretação de horários',async({pag
  await page.getByLabel('Mensagem para o assistente',{exact:true}).fill('Qual o horário da minha consulta?');
  const agenda=page.waitForResponse(r=>r.url().endsWith('/assistant')&&r.request().method()==='POST');await page.getByRole('button',{name:'Enviar',exact:true}).click();expect((await(await agenda).json()).action).toBe('Consultas');
  await expect(page.getByText('Seu assistente',{exact:true})).toHaveCount(1);
+ await page.getByRole('button',{name:'Fechar assistente',exact:true}).click();
+ await expect(page.getByTestId('pain-body-map')).toBeVisible();
+ await page.getByRole('tab',{name:'Assistente',exact:true}).click();
+ await expect(transcript.getByText('Que horas é a novela da Globo?',{exact:true})).toHaveCount(1);
+ await page.keyboard.press('Escape');
+ await expect(page.getByTestId('pain-body-map')).toBeVisible();
 });
 test('alteração de contato exige senha e persiste depois de entrar novamente',async({page,request})=>{
  const suffix=String(Date.now()).slice(-8),phone='113'+suffix,newPhone='112'+suffix,password='TesteCuidali2026',email='profile'+suffix+'@example.com',newEmail='updated'+suffix+'@example.com';

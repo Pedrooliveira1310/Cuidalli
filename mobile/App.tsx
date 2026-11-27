@@ -3,6 +3,8 @@ import {AppIcon,BrandMark,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} f
 import {CareDrawer,CareSidebar,CareTabs,MenuToggle} from "./src/CareNavigation";
 import {AccountProfile,PasswordRecovery,LegalLink} from "./src/AccountScreens";
 import {Welcome} from "./src/Welcome";
+import {ElderCalendar} from "./src/Calendar";
+import {ActionFeedback, FeedbackNotice, type Feedback} from "./src/ActionFeedback";
 import React, { useEffect, useState, useCallback, useRef, useContext } from "react";
 import {
   AppState,
@@ -452,21 +454,38 @@ function Home({
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const [activitySettingsOpen,setActivitySettingsOpen]=useState(false);
+  const notify=useContext(ActionFeedback);
+  const [checkInBusy,setCheckInBusy]=useState(false);
+  const [checkInUntil,setCheckInUntil]=useState(0);
+  const checkInInFlight=useRef(false);
   const caregiver = user.role === "caregiver";
+  useEffect(()=>{
+    if(caregiver || !state.data?.check_in_remaining_seconds) return;
+    const until=Date.now()+1000*state.data.check_in_remaining_seconds;
+    setCheckInUntil(current=>Math.max(current,until));
+  },[caregiver,state.data]);
+  useEffect(()=>{
+    if(!checkInUntil) return;
+    const timeout=setTimeout(()=>setCheckInUntil(current=>current===checkInUntil?0:current),Math.max(0,checkInUntil-Date.now()));
+    return ()=>clearTimeout(timeout);
+  },[checkInUntil]);
   const pendingAlerts = state.data?.alerts?.filter((alert:CareAlert)=>alert.status==="open").length ?? 0;
   const appointmentsToday = state.data?.appointments.length ?? 0;
   const firstUnconfirmed = state.data?.doses.find((dose:{status:string})=>dose.status!=="taken");
   async function checkIn() {
-    if (busy) return;
-    setBusy(true);
+    if (checkInInFlight.current || Date.now()<checkInUntil) return;
+    checkInInFlight.current=true;
+    setCheckInBusy(true);
     try {
-      await api(`/elders/${elder}/activity`,"POST");
-      setMessage("Seu cuidador já pode ver que você está bem hoje.");
+      const result=await api<{message:string;check_in_remaining_seconds:number}>(`/elders/${elder}/activity`,"POST");
+      setCheckInUntil(Date.now()+1000*result.check_in_remaining_seconds);
+      notify(result.message);
       state.reload();
     } catch (error) {
-      setMessage((error as Error).message);
+      notify((error as Error).message,true);
     } finally {
-      setBusy(false);
+      checkInInFlight.current=false;
+      setCheckInBusy(false);
     }
   }
   async function dose(id: number, status: string) {
@@ -478,10 +497,10 @@ function Home({
         date: state.data.date,
         status,
       });
-      setMessage("Dose registrada.");
+      notify("Dose registrada.");
       state.reload();
     } catch (e) {
-      setMessage((e as Error).message);
+      notify((e as Error).message,true);
     } finally {
       setBusy(false);
     }
@@ -535,7 +554,14 @@ function Home({
     const reminders = (
       <View style={{gap:spacing}}>
         <Loading state={state} refresh={false} />
-        <Text style={s.subtitle}>Lembretes de hoje</Text>
+        <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:6,flexWrap:"wrap"}}>
+          <Text style={s.subtitle}>Lembretes de hoje</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Abrir calendário" onPress={()=>navigate("Calendário")}
+            style={{minHeight:44,flexDirection:"row",alignItems:"center",gap:5,paddingHorizontal:7,borderRadius:10,backgroundColor:"#E8F4F0"}}>
+            <AppIcon name="calendar" size={19} color={colors.green}/>
+            <Text style={{fontSize:15,fontWeight:"700",color:colors.green}}>Calendário</Text>
+          </Pressable>
+        </View>
         {!!doses.length && <Text accessibilityRole="progressbar" accessibilityLabel="Doses confirmadas"
           aria-valuemin={0} aria-valuemax={Math.max(1,doses.length)} aria-valuenow={taken}
           accessibilityValue={{min:0,max:Math.max(1,doses.length),now:taken}} style={s.muted}>
@@ -558,7 +584,9 @@ function Home({
       <View style={{gap:8}}>
         {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
         <View style={{flexDirection:"row", flexWrap:"wrap", gap:8}}>
-          <Button label="Estou bem hoje" tone="light" disabled={busy} onPress={checkIn} />
+          <Button label={checkInUntil?"✓ Aviso enviado":"Estou bem hoje"}
+            tone={checkInUntil?"light":"blue"} busy={checkInBusy}
+            disabled={!!checkInUntil||!state.data||state.denied} onPress={checkIn} />
           <Button label="Registrar dor" tone="light" onPress={() => navigate("Dores")} />
         </View>
       </View>
@@ -693,6 +721,14 @@ function Home({
     </>
   );
 }
+function CalendarScreen({elder,onOpenAppointments,onBack}:{elder:number;onOpenAppointments:()=>void;onBack:()=>void}) {
+  const state=useData(`/elders/${elder}/appointments`);
+  return <>
+    <Loading state={state} refresh={!!state.error}/>
+    {state.data && !state.denied && <ElderCalendar appointments={state.data.items} onOpenAppointments={onOpenAppointments} onBack={onBack}/>}
+  </>;
+}
+
 function Resources({
   elder,
   user,
@@ -705,8 +741,8 @@ function Resources({
   const path = `/elders/${elder}/${kind}`,
     state = useData(path),
     [editing, setEditing] = useState<any>(null),
-    [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
+  const notify=useContext(ActionFeedback);
   const canWrite = true;
   const caregiver = user.role === "caregiver";
   const label = {
@@ -727,10 +763,10 @@ function Resources({
     setBusy(true);
     try {
       const r = await api(`${path}/${item.id}`, "DELETE");
-      setMessage(r.message);
+      notify(r.message);
       state.reload();
     } catch (e) {
-      setMessage((e as Error).message);
+      notify((e as Error).message,true);
     } finally {
       setBusy(false);
     }
@@ -740,7 +776,6 @@ function Resources({
   const addRecord = canWrite && (<Button
               label={`Adicionar ${kind === "medications" ? "medicamento" : kind === "appointments" ? "consulta" : "contato"}`}
               onPress={() => {
-                setMessage("");
                 setEditing({ is_primary: false });
               }}
             />);
@@ -750,11 +785,6 @@ function Resources({
         <Text accessibilityRole="header" style={tight?s.subtitle:s.title}>{label}</Text>
         {!state.denied && addRecord}
       </View>}
-      {!!message && (
-        <Text style={s.text} accessibilityRole="alert">
-          {message}
-        </Text>
-      )}
       {state.denied ? (
         <Loading state={state} refresh={caregiver} />
       ) : editing ? (
@@ -796,7 +826,7 @@ function Resources({
                 editing.id ? "PATCH" : "POST",
                 payload,
               );
-              setMessage(r.message);
+              notify(r.message);
               setEditing(null);
               state.reload();
             }}
@@ -871,7 +901,7 @@ function Resources({
                           });
                           state.reload();
                         } catch (e) {
-                          setMessage((e as Error).message);
+                          notify((e as Error).message,true);
                         } finally {
                           setBusy(false);
                         }
@@ -882,7 +912,7 @@ function Resources({
                     label={`Abrir discador: ${item.name}`}
                     tone="light"
                     onPress={async () =>
-                      setMessage(await callContact(item.phone))
+                      notify(await callContact(item.phone))
                     }
                   />
                   </View>
@@ -1041,6 +1071,7 @@ function BodyMap({disabled = false, view, selectedRegions, onSelect, onIntimate,
 }
 
 function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>void }) {
+  const notify=useContext(ActionFeedback);
   const [intimate, setIntimate] = useState(false);
   const [anatomy, setAnatomy] = useState<"male"|"female"|null>(null);
   const [step,setStep]=useState(0);
@@ -1055,7 +1086,6 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
     [type, setType] = useState("Pontada"),
     [intensity, setIntensity] = useState<number|null>(null),
     [onset, setOnset] = useState("Hoje"),
-    [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
   const selectedRegions=locations.filter(location=>location.view===view).map(location=>location.region);
   const hasIntimateSelection=selectedRegions.some(region=>intimateRegions.includes(region));
@@ -1076,7 +1106,6 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
     setOnset("Hoje");
     setIntimate(false);
     setAnatomy(null);
-    setMessage("");
     setStep(0);
     setStepJump(undefined);
     setCreating(true);
@@ -1099,9 +1128,9 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
     try {
       await api(`${path}/${id}/seen`, "POST");
       state.reload();
-      setMessage("Visualização registrada.");
+      notify("Visualização registrada.");
     } catch (e) {
-      setMessage((e as Error).message);
+      notify((e as Error).message,true);
     } finally {
       setBusy(false);
     }
@@ -1111,11 +1140,6 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
       <>
         {user.role==="elder" && <BackButton label={returnToBody?"Voltar ao corpo":"Voltar"} onPress={backInPains}/>}
         {!creating && <Text style={s.title}>Registro de dores</Text>}
-        {!!message && (
-          <Text accessibilityRole="alert" style={s.text}>
-            {message}
-          </Text>
-        )}
         {user.role === "elder" && !creating && (
           <Button label="Registrar uma dor" onPress={startRecord} />
         )}{" "}
@@ -1220,7 +1244,7 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
                   onset,
                   notes: v.notes || "",
                 });
-                setMessage(r.message);
+                notify(r.message);
                 setCreating(false);
                 state.reload();
               }}
@@ -1464,6 +1488,7 @@ function SOS({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) {
   const landscape=height<460 && width>=560;
   const state=useData(`/elders/${elder}/contacts`);
   const [message,setMessage]=useState("");
+  const [sendError,setSendError]=useState(false);
   const [history,setHistory]=useState(false);
   const [sending,setSending]=useState(false);
   const inFlight=useRef(false);
@@ -1476,6 +1501,7 @@ function SOS({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) {
     inFlight.current=true;
     setSending(true);
     setMessage("");
+    setSendError(false);
     try {
       let status:string;
       try {
@@ -1483,6 +1509,7 @@ function SOS({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) {
         status=result.message;
       } catch (error) {
         status=(error as Error).message || "Não foi possível enviar o pedido.";
+        setSendError(true);
       }
       if (shouldDial) status+=" "+await callContact(contact.phone);
       setMessage(status);
@@ -1536,7 +1563,7 @@ function SOS({elder,navigate}:{elder:number;navigate:(tab:string)=>void}) {
     </View>
     <View style={{flex:landscape?1:undefined,minWidth:0,gap:8}}>
       <Button label="Meus pedidos de ajuda" tone="light" onPress={()=>setHistory(true)}/>
-      {!!message && <Text accessibilityRole="alert" style={s.text}>{message}</Text>}
+      {!!message && <FeedbackNotice feedback={{message,error:sendError}} onDismiss={()=>setMessage("")}/>}
     </View>
     </View>
   </>;
@@ -1550,7 +1577,8 @@ const alertFilters = [
   {status:"resolved",label:"Concluídos"},
 ] as const;
 function Alerts({elder,caregiver,showFilters=false,onUpdated,onOpenAll}:{elder:number;caregiver:boolean;showFilters?:boolean;onUpdated?:()=>void;onOpenAll?:()=>void}) {
-  const state=useData(`/elders/${elder}/alerts`),[message,setMessage]=useState("");
+  const state=useData(`/elders/${elder}/alerts`);
+  const notify=useContext(ActionFeedback);
   const [filter,setFilter]=useState<AlertStatus|"all">("all");
   const items: CareAlert[] = state.data?.items ?? [];
   const filtered = filter==="all" ? items : items.filter(item=>item.status===filter);
@@ -1559,7 +1587,7 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated,onOpenAll}:{elder:n
     .slice(0,3) : filtered;
   useEffect(()=>{const t=setInterval(state.reload,15000);return ()=>clearInterval(t);},[state.reload]);
   const names:Record<string,string>={sos:"Pedido de ajuda",inactivity:"Ausência de atividade",pain:"Novo registro de dor"};
-  async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});setMessage(r.message);state.reload();onUpdated?.();}catch(e){setMessage((e as Error).message);}}
+  async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});notify(r.message);state.reload();onUpdated?.();}catch(e){notify((e as Error).message,true);}}
   return <><Text accessibilityRole="header" style={showFilters?s.title:s.subtitle}>Alertas e acompanhamento</Text>{!!state.error&&<Text style={s.error}>{state.error}</Text>}
     {showFilters&&state.data&&(
       <View style={[s.row,{gap:8}]} accessibilityLabel="Filtrar alertas por status">
@@ -1600,7 +1628,7 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated,onOpenAll}:{elder:n
       style={{alignSelf:"flex-start",minHeight:44,justifyContent:"center"}}>
       <Text style={{fontSize:16,color:colors.blue,fontWeight:"700"}}>Ver todos os alertas</Text>
     </Pressable>}
-    {!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}</>;
+    </>;
 }
 type ChatTurn = {id:number; content:string; reply:string};
 type ChatDose = {time_id:number; name:string; dosage:string; time:string};
@@ -1622,16 +1650,18 @@ function ChatBubble({text,own=false,onListen,live=false}:{
   </View>;
 }
 
-function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;navigate:(tab:string)=>void}) {
+function Assistant({elder,caregiver,navigate,onClose,onDoseRecorded,recentQuestions}:{
+  elder:number;caregiver:boolean;navigate:(tab:string)=>void;onClose:()=>void;onDoseRecorded:()=>void;
+  recentQuestions:React.RefObject<string[]>;
+}) {
   const path=`/elders/${elder}/assistant`;
   const state=useData(path);
   const [draft,setDraft]=useState("");
   const [pending,setPending]=useState<string|null>(null);
-  const [feedback,setFeedback]=useState("");
+  const [feedback,setFeedback]=useState<Feedback|null>(null);
   const [sent,setSent]=useState<ChatTurn[]>([]);
   const [latest,setLatest]=useState<ChatReply|null>(null);
   const [savingDose,setSavingDose]=useState(false);
-  const previousQuestion=useRef<string|null>(null);
   const requestInFlight=useRef(false);
   const doseInFlight=useRef(false);
   const speechCleanup=useRef<()=>void>(()=>{});
@@ -1655,11 +1685,11 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     nearBottom.current=true;
     setPending(question);
     setDraft("");
-    setFeedback("");
+    setFeedback(null);
     try {
-      const response=await api<ChatReply>(path,"POST",{message:question,previous_message:previousQuestion.current});
+      const response=await api<ChatReply>(path,"POST",{message:question,previous_messages:recentQuestions.current});
       if (!mounted.current) return;
-      previousQuestion.current=response.mode==="urgent"?null:question;
+      recentQuestions.current=response.mode==="urgent"?[]:[...recentQuestions.current,question].slice(-3);
       setSent(current=>[...current,{id:response.id,content:question,reply:response.reply}]);
       setLatest(response);
       state.reload();
@@ -1667,7 +1697,7 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     } catch(error) {
       if (mounted.current) {
         setDraft(current=>current||question);
-        setFeedback((error as Error).message);
+        setFeedback({message:(error as Error).message,error:true});
       }
     } finally {
       requestInFlight.current=false;
@@ -1677,8 +1707,8 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
 
   function startVoice() {
     speechCleanup.current();
-    setFeedback("");
-    speechCleanup.current=listen(value=>{speechCleanup.current();void ask(value);},setFeedback);
+    setFeedback(null);
+    speechCleanup.current=listen(value=>{speechCleanup.current();void ask(value);},message=>setFeedback({message,error:true}));
   }
 
   function confirmDose(dose:ChatDose,response:ChatReply) {
@@ -1691,9 +1721,10 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
         setLatest(current=>current?.id===response.id?{
           ...current,confirmation_doses:current.confirmation_doses.filter(item=>item.time_id!==dose.time_id)
         }:current);
-        setFeedback("Dose confirmada.");
+        onDoseRecorded();
+        setFeedback({message:"Dose confirmada.",error:false});
       } catch(error) {
-        setFeedback((error as Error).message);
+        setFeedback({message:(error as Error).message,error:true});
       } finally {
         doseInFlight.current=false;
         setSavingDose(false);
@@ -1703,12 +1734,17 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
 
   return <View style={{flex:1,minHeight:0,width:"100%",maxWidth:760,alignSelf:"center",
     borderRadius:17,borderWidth:1,borderColor:"#D5E4E9",backgroundColor:"#FFF",overflow:"hidden"}}>
-    <View style={{flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:12,paddingVertical:7,
+    <View style={{flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:12,paddingVertical:6,
       borderBottomWidth:1,borderColor:"#DCE8ED"}}>
       <View style={{width:34,height:34,borderRadius:11,alignItems:"center",justifyContent:"center",backgroundColor:"#E3F2ED"}}>
         <AppIcon name="chat" color={colors.green} size={21}/>
       </View>
-      <Text accessibilityRole="header" style={s.subtitle}>Seu assistente</Text>
+      <Text accessibilityRole="header" style={[s.subtitle,{flex:1}]}>Seu assistente</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Fechar assistente" onPress={onClose}
+        style={({pressed})=>({width:44,height:44,borderRadius:12,backgroundColor:pressed?"#D6E8E2":"#EAF4F1",
+          alignItems:"center",justifyContent:"center"})}>
+        <AppIcon name="close" size={22} color={colors.green}/>
+      </Pressable>
     </View>
     {state.denied ? <View style={{padding:12}}><Loading state={state}/></View> : <>
       <ScrollView ref={transcript} testID="assistant-transcript" style={{flex:1,minHeight:0,backgroundColor:"#F3F8FA"}}
@@ -1718,9 +1754,11 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
           nearBottom.current=nativeEvent.contentSize.height-nativeEvent.layoutMeasurement.height-nativeEvent.contentOffset.y<48;
         }}
         onContentSizeChange={()=>{if(nearBottom.current)transcript.current?.scrollToEnd({animated:false});}}>
-        {!turns.length && !pending && !state.loading && !state.error &&
-          <ChatBubble text="Olá! Como posso ajudar?"/>}
-        {!turns.length && <Loading state={state}/>}
+        {!turns.length && !pending && !state.loading && !state.error && <>
+          <ChatBubble text="Olá! Posso conversar, responder perguntas ou ajudar com seus cuidados. Como posso ajudar?"/>
+          <Text style={s.muted}>{caregiver?"Esta conversa é visível para a pessoa idosa e os cuidadores vinculados.":"Seus cuidadores vinculados também podem ler esta conversa."}</Text>
+        </>}
+        {!turns.length && <Loading state={state} refresh={!!state.error}/>}
         {turns.map(turn=><View key={turn.id} style={{gap:6}}>
           <ChatBubble text={turn.content} own/>
           <ChatBubble text={turn.reply} live={latest?.id===turn.id} onListen={()=>speak(turn.reply)}/>
@@ -1739,7 +1777,7 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
         </View>}
       </ScrollView>
       <View style={{padding:8,gap:6,borderTopWidth:1,borderColor:"#DCE8ED"}}>
-        {!!feedback && <Text accessibilityRole="alert" style={s.muted}>{feedback}</Text>}
+        {feedback && <FeedbackNotice feedback={feedback} onDismiss={()=>setFeedback(null)}/>}
         <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
           <Pressable accessibilityRole="button" accessibilityLabel="Falar com o assistente"
             accessibilityState={{disabled:!!pending}} disabled={!!pending} onPress={startVoice}
@@ -1896,6 +1934,16 @@ export default function App() {
   const shortWide = height < 460 && width >= 560;
   const [setup, setSetup] = useState(false);
   const [drawerOpen,setDrawerOpen] = useState(false);
+  const [assistantOpen,setAssistantOpen]=useState(false);
+  const recentAssistantQuestions=useRef<string[]>([]);
+  const [feedback,setFeedback]=useState<Feedback|null>(null);
+  const notify=useCallback((message:string,error=false)=>setFeedback({message,error}),[]);
+  const closeAssistant=useCallback(()=>setAssistantOpen(false),[]);
+  useEffect(()=>{
+    if(!feedback) return;
+    const timeout=setTimeout(()=>setFeedback(null),feedback.error?15000:11000);
+    return ()=>clearTimeout(timeout);
+  },[feedback]);
   const [railCollapsed,setRailCollapsed] = useState(()=>{
     if (Platform.OS!=="web") return false;
     try { return window.localStorage.getItem("cuidali.menu.recolhido")==="1"; }
@@ -1932,6 +1980,11 @@ export default function App() {
     catch { /* The layout still works without browser storage. */ }
   }, [desktop,railCollapsed]);
   function setTab(next:string) {
+    if (next==="Assistente" && elder) {
+      setAssistantOpen(true);
+      return;
+    }
+    if (next==="Assistente") next="Vínculos";
     const destination = caregiver && next === "SOS" ? "Alertas" : next;
     if (destination !== currentTab.current) {
       navigationHistory.current.push(currentTab.current);
@@ -1947,6 +2000,8 @@ export default function App() {
     setUser(u);
     setElder(u.role==="elder" ? Number(u.id) : demoElder);
     setDrawerOpen(false);
+    setAssistantOpen(false);
+    setFeedback(null);
     navigationHistory.current = [];
     currentTab.current = u.role==="elder" || demoElder ? "Início" : "Vínculos";
     setTabState(currentTab.current);
@@ -1973,6 +2028,18 @@ export default function App() {
     })();
     return () => setExpiredHandler(() => {});
   }, []);
+  useEffect(()=>{
+    recentAssistantQuestions.current=[];
+    if(!user||!elder) setAssistantOpen(false);
+  },[user?.id,elder]);
+  useEffect(()=>{
+    if(!assistantOpen||Platform.OS!=="web") return;
+    const closeOnEscape=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"&&!event.defaultPrevented) closeAssistant();
+    };
+    window.addEventListener("keydown",closeOnEscape);
+    return ()=>window.removeEventListener("keydown",closeOnEscape);
+  },[assistantOpen,closeAssistant]);
   useEffect(()=>{
     if(!user||demo||Platform.OS!=='web'||window.CuidaliNative)return;
     const restore=()=>window.CuidaliWebPush?.restore(token=>api('/push-tokens','POST',{token,platform:'web'})).catch(()=>{});
@@ -2021,7 +2088,7 @@ export default function App() {
   useEffect(() => {
     const handler = BackHandler.addEventListener("hardwareBackPress", () => {
       if (
-        ["Medicamentos", "Consultas", "Contatos", "Dores", "Vínculos"].includes(
+        ["Medicamentos", "Calendário", "Consultas", "Contatos", "Dores", "Vínculos"].includes(
           tab,
         )
       ) {
@@ -2099,7 +2166,6 @@ export default function App() {
           />
         </>
       );
-    else if (tab === "Assistente" && elder) screen = <Assistant key={elder} elder={elder} caregiver={caregiver} navigate={setTab} />;
     else if (!elder)
       screen = (
         <>
@@ -2118,6 +2184,8 @@ export default function App() {
       screen = <Alerts key={elder} elder={elder} caregiver showFilters />;
     else if (tab === "Dores")
       screen = <Pains key={elder} elder={elder} user={user} onBack={goBack} />;
+    else if (tab === "Calendário" && elderLayout)
+      screen = <CalendarScreen key={elder} elder={elder} onOpenAppointments={()=>setTab("Consultas")} onBack={goBack} />;
     else
       screen = (
         <Resources
@@ -2134,17 +2202,17 @@ export default function App() {
         />
       );
   }
-  const chatScreen=!!elder && tab==="Assistente";
-  const fixedContent=chatScreen || (elderLayout && !compactOverflow);
+  const fixedContent=elderLayout && !compactOverflow;
   const Content = fixedContent ? View : ScrollView;
   return (
     <ElderLayout.Provider value={elderLayout}>
     <ElderViewport.Provider value={elderHeight}>
+    <ActionFeedback.Provider value={notify}>
     <SafeAreaProvider>
       <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FAFCFC"}]}>
         <StatusBar style="dark" />
-        <View aria-hidden={drawerOpen&&!desktop}
-          importantForAccessibility={drawerOpen&&!desktop?"no-hide-descendants":"auto"}
+        <View aria-hidden={(drawerOpen&&!desktop)||assistantOpen}
+          importantForAccessibility={(drawerOpen&&!desktop)||assistantOpen?"no-hide-descendants":"auto"}
           style={{flex:1,flexDirection:desktop&&!elderLayout?"row":"column"}}>
         {user && desktop && !elderLayout && (
           <CareSidebar name={user.name} caregiver={caregiver} screen={tab} onNavigate={setTab}
@@ -2172,7 +2240,7 @@ export default function App() {
               paddingHorizontal:width >= 380 ? 22 : 16,
               paddingVertical:height < 640 ? 8 : 20,
               gap:height < 640 ? 6 : 12,
-            },chatScreen&&{maxWidth:840,paddingHorizontal:width<400?8:16,paddingVertical:6,gap:6}],
+            }],
           } : {
             ref:scroll, keyboardShouldPersistTaps:"handled",
             testID:elderLayout?"elder-content":undefined,
@@ -2192,7 +2260,7 @@ export default function App() {
                 onCancel={getServer() ? () => setSetup(false) : undefined} />
             ) : user ? (
               <>
-                {demo && !elderLayout && !chatScreen && (
+                {demo && !elderLayout && (
                   <View style={[s.row,{justifyContent:"space-between",backgroundColor:colors.light,
                     borderRadius:12,paddingLeft:12,paddingRight:6}]}>
                     <Text style={[s.muted,{fontWeight:"700",fontSize:14}]}>Dados de demonstração</Text>
@@ -2214,9 +2282,9 @@ export default function App() {
                     <CareSubject elder={elder} onOpen={()=>setTab("Vínculos")}/>
                   </View>
                 )}
-                {tab !== "Início" && !chatScreen && !(elderLayout && ["Cuidados","SOS","Assistente","Dores"].includes(tab)) && <BackButton onPress={goBack} />}
+                {tab !== "Início" && !(elderLayout && (["Cuidados","SOS","Dores"].includes(tab)||(shortWide&&tab==="Calendário"))) && <BackButton onPress={goBack} />}
                 {!demo&&<Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />}
-                {elderLayout && tab !== "Início" && !chatScreen
+                {elderLayout && tab !== "Início"
                   ? <View testID="elder-screen" style={{marginVertical:"auto",flexShrink:0,gap:height < 640 ? 8 : 14}}>{screen}</View>
                   : screen}
 
@@ -2231,13 +2299,42 @@ export default function App() {
         </KeyboardAvoidingView>
         {user && (!desktop || elderLayout) && <CareTabs caregiver={caregiver} screen={tab} onNavigate={setTab}/>}
         </View>
+        {!!user && !!elder && desktop && !elderLayout && <Pressable accessibilityRole="button" accessibilityLabel="Abrir assistente"
+          onPress={()=>setTab("Assistente")} style={({pressed})=>({position:"absolute",right:18,bottom:18,
+            minHeight:52,borderRadius:26,paddingHorizontal:17,gap:8,backgroundColor:pressed?"#144C3D":colors.green,
+            alignItems:"center",flexDirection:"row",boxShadow:"0 5px 18px #12344933"})}>
+          <AppIcon name="chat" size={23} color="#FFF"/>
+          <Text style={{color:"#FFF",fontWeight:"800",fontSize:16}}>Assistente</Text>
+        </Pressable>}
+        {feedback && !!user && <View pointerEvents="box-none" style={{position:"absolute",top:8,left:12,right:12,alignItems:"center"}}>
+          <View style={{width:"100%",maxWidth:520}}>
+            <FeedbackNotice feedback={feedback} onDismiss={()=>setFeedback(null)}/>
+          </View>
+        </View>}
         {user && !desktop && !elderLayout && (
           <CareDrawer name={user.name} caregiver={caregiver} screen={tab} visible={drawerOpen}
             onToggle={()=>setDrawerOpen(false)}
             onNavigate={next=>{setDrawerOpen(false);setTab(next);}}/>
         )}
+        {!!user && !!elder && <Modal visible={assistantOpen} transparent onRequestClose={closeAssistant}>
+          <KeyboardAvoidingView behavior={Platform.OS==="ios"?"padding":undefined} style={{flex:1}}>
+            <Pressable accessible={false} focusable={false} aria-hidden onPress={closeAssistant}
+              style={{position:"absolute",top:0,right:0,bottom:0,left:0,backgroundColor:"#102C4660"}}/>
+            <SafeAreaView pointerEvents="box-none" style={{flex:1,justifyContent:"flex-end",alignItems:"flex-end",
+              paddingHorizontal:width<560?8:18,paddingBottom:width<560?8:16,paddingTop:8}}>
+              <View accessibilityViewIsModal accessibilityLabel="Assistente Cuidali"
+                style={{flex:1,maxHeight:width<560?Math.min(650,height*.87):640,width:"100%",maxWidth:440,
+                  borderRadius:18,boxShadow:"0 10px 30px #12344940"}}>
+                <Assistant key={`${user.id}:${elder}`} elder={elder} caregiver={caregiver} onClose={closeAssistant}
+                  navigate={destination=>{closeAssistant();setTab(destination);}}
+                  onDoseRecorded={()=>setDoseRevision(value=>value+1)} recentQuestions={recentAssistantQuestions}/>
+              </View>
+            </SafeAreaView>
+          </KeyboardAvoidingView>
+        </Modal>}
       </SafeAreaView>
     </SafeAreaProvider>
+    </ActionFeedback.Provider>
     </ElderViewport.Provider>
     </ElderLayout.Provider>
   );

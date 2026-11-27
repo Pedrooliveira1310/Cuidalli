@@ -356,10 +356,15 @@ final class Api {
             'date'=>$today,'timezone'=>'America/Sao_Paulo',
             'elder'=>$this->query('SELECT id,name,phone FROM users WHERE id=?',[$elder])->fetch(),
             'last_activity'=>$this->query('SELECT action,created_at FROM activities WHERE elder_id=? AND actor_id=? ORDER BY id DESC LIMIT 1',[$elder,$elder])->fetch() ?: null,
+            'check_in_remaining_seconds'=>$this->checkInRemaining($elder),
             'doses'=>$this->query("SELECT t.id AS time_id,m.id AS medication_id,m.name,m.dosage,TIME_FORMAT(t.time,'%H:%i') AS time,COALESCE(d.status,'unconfirmed') AS status,d.recorded_at FROM medications m JOIN medication_times t ON t.medication_id=m.id LEFT JOIN dose_records d ON d.time_id=t.id AND d.dose_date=? WHERE m.elder_id=? AND m.active=1 AND t.active=1 AND ? BETWEEN m.start_date AND m.end_date ORDER BY t.time,m.id",[$today,$elder,$today])->fetchAll(),
             'appointments'=>$this->query('SELECT * FROM appointments WHERE elder_id=? AND cancelled=0 AND scheduled_at>=? AND scheduled_at<? ORDER BY scheduled_at',[$elder,$start,$end])->fetchAll(),
             'dose_history'=>$this->query('SELECT d.*,t.time,m.name,m.dosage FROM dose_records d JOIN medication_times t ON t.id=d.time_id JOIN medications m ON m.id=t.medication_id WHERE m.elder_id=? ORDER BY d.dose_date DESC,t.time DESC LIMIT 200',[$elder])->fetchAll()
         ];
+    }
+
+    private function checkInRemaining(int $elder): int {
+        return (int)$this->query("SELECT COALESCE(GREATEST(0,900-TIMESTAMPDIFF(SECOND,MAX(created_at),UTC_TIMESTAMP())),0) FROM activities WHERE elder_id=? AND actor_id=? AND action='check_in' AND created_at>DATE_SUB(UTC_TIMESTAMP(),INTERVAL 15 MINUTE)",[$elder,$elder])->fetchColumn();
     }
 
     public function runMonitoring(): void {
@@ -395,7 +400,18 @@ final class Api {
         return ['role'=>'caregiver','items'=>$this->query("SELECT a.*,u.name AS elder_name FROM care_alerts a JOIN care_links l ON l.elder_id=a.elder_id JOIN users u ON u.id=a.elder_id WHERE l.caregiver_id=? AND a.status IN ('open','accepted') ORDER BY a.id DESC LIMIT 100",[$this->user['id']])->fetchAll()];
     }
     private function care(string $method,int $elder,string $resource,int $id,array $data): array {
-        if ($resource==='activity' && $method==='POST') { $this->role('elder'); $this->activity($elder,'check_in'); return ['message'=>'Presença registrada.']; }
+        if ($resource==='activity' && $method==='POST' && !$id) {
+            $this->role('elder');
+            return $this->transaction(function() use ($elder) {
+                $this->query('SELECT id FROM users WHERE id=? FOR UPDATE',[$elder]);
+                $remaining=$this->checkInRemaining($elder);
+                if ($remaining===0) $this->activity($elder,'check_in');
+                return [
+                    'message'=>$remaining===0 ? 'Seu cuidador já pode ver que você está bem.' : 'Seu aviso já foi enviado há pouco.',
+                    'check_in_remaining_seconds'=>$remaining ?: 900,
+                ];
+            });
+        }
         if ($resource==='settings') {
             if ($method==='GET') return ['inactivity_hours'=>(int)($this->query('SELECT inactivity_hours FROM care_settings WHERE elder_id=?',[$elder])->fetchColumn() ?: 24)];
             $this->role('caregiver'); if($method!=='PATCH') $this->fail(405,'Método não permitido.');
@@ -435,21 +451,35 @@ final class Api {
                 ? 'Posso consultar medicamentos e consultas da pessoa acompanhada, informar a data e a hora atuais ou abrir Dores e Alertas.'
                 : 'Posso consultar seus medicamentos e consultas, informar a data e a hora atuais ou ajudar a abrir Dores e SOS.';
             $urgent=preg_match('/\b(sos|socorro|emergencia|urgente)\b|preciso de ajuda/',$q);
-            $previousMessage=isset($data['previous_message']) ? $this->text($data,'previous_message',500) : null;
+            $previousMessages=[];
+            if (isset($data['previous_messages'])) {
+                if (!is_array($data['previous_messages']) || !array_is_list($data['previous_messages']) || count($data['previous_messages'])>3)
+                    $this->fail(422,'Histórico de conversa inválido.');
+                foreach ($data['previous_messages'] as $previous) $previousMessages[]=$this->text(['message'=>$previous],'message',500);
+            } elseif (isset($data['previous_message'])) {
+                $previousMessages[]=$this->text($data,'previous_message',500);
+            }
             $aiAnswer=!$urgent && AssistantIntent::available() && $this->withinRate('assistant-ai:'.$this->user['id'],60,60)
-                ? AssistantIntent::respond($message,$previousMessage) : null;
-            $intent=$urgent ? 'help' : ($aiAnswer['intent'] ?? $this->localAssistantIntent($q,$caregiver));
+                ? AssistantIntent::respond($message,$previousMessages, $caregiver) : null;
+            $routine=$this->localAssistantIntent($q,$caregiver);
+            $intent=$urgent ? 'help' : (in_array($routine,['calendar','check_in'],true) ? $routine : ($aiAnswer['intent'] ?? $routine));
             if ($caregiver && $intent==='help') {
                 $reply='Abra Alertas para acompanhar os pedidos de ajuda da pessoa idosa.'; $action='Alertas';
             }
             elseif (!$caregiver && $intent==='help') {
                 $reply='Abra o SOS para pedir ajuda aos seus cuidadores e ligar para o contato de confiança.'; $action='SOS';
             }
+            elseif ($intent==='calendar') { $reply='Abra o calendário para ver em quais dias você tem consultas.'; $action=$caregiver?'Consultas':'Calendário'; }
+            elseif ($intent==='check_in' && !$caregiver) { $reply='Na tela Início, toque em “Estou bem hoje” para avisar seu cuidador.'; $action='Início'; }
             elseif ($intent==='pain') { $reply='Você pode registrar onde dói e a intensidade em Dores para compartilhar com seus cuidadores.'; $action='Dores'; }
             elseif ($intent==='confirm_dose') {
-                if($this->user['role']!=='elder')$this->fail(403,'A confirmação precisa ser feita pela pessoa idosa.');
-                $d=$this->dashboard($elder);$confirmationDoses=array_values(array_filter($d['doses'],fn($x)=>$x['status']!=='taken'));
-                $reply=$confirmationDoses?'Escolha e confirme a dose que você tomou. A confirmação só será registrada quando você confirmar o medicamento e o horário.':'Todas as doses de hoje já estão confirmadas, ou não há dose cadastrada para hoje.';$action='Início';
+                if ($caregiver) {
+                    $reply='A confirmação da dose é feita pela pessoa idosa. Você pode acompanhar os registros na tela Medicamentos.';
+                    $action='Medicamentos';
+                } else {
+                    $d=$this->dashboard($elder);$confirmationDoses=array_values(array_filter($d['doses'],fn($x)=>$x['status']!=='taken'));
+                    $reply=$confirmationDoses?'Escolha o medicamento e o horário da dose que você tomou.':'Todas as doses de hoje já estão confirmadas, ou não há dose cadastrada para hoje.';$action='Início';
+                }
             } elseif ($intent==='next_dose') {
                 $dashboard=$this->dashboard($elder); $next=null;
                 foreach ($dashboard['doses'] as $dose) {
@@ -465,10 +495,7 @@ final class Api {
                 $reply=$a ? 'Próximas consultas: '.implode('; ',array_map(fn($x)=>$x['specialty'].' em '.(new DateTimeImmutable($x['scheduled_at'],new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('America/Sao_Paulo'))->format('d/m/Y H:i').' em '.$x['location'],$a)) : 'Você não tem próximas consultas cadastradas.'; $action='Consultas';
             } elseif ($intent==='clock') $reply='Agora são '.date('H:i').' de '.date('d/m/Y').', no horário de São Paulo.';
             elseif ($intent==='greeting') $reply=$aiAnswer['reply'] ?? 'Olá! '.$assistantOptions.' Como posso ajudar?';
-            else $reply=$aiAnswer['reply'] ?? 'Posso ajudar com a rotina registrada no Cuidali. '.$assistantOptions.' O que você gostaria de consultar?';
-            if ($aiAnswer !== null && !in_array($intent,['greeting','other'],true)) {
-                $reply=$aiAnswer['reply']."\n\n".$reply;
-            }
+            else $reply=$aiAnswer['reply'] ?? 'Estou com dificuldade para responder a perguntas gerais agora. '.$assistantOptions;
             $this->query('INSERT INTO assistant_messages(elder_id,content,reply) VALUES(?,?,?)',[$elder,$message,$reply]);
             $messageId=(int)$this->db->lastInsertId();
             if($this->user['role']==='elder') $this->activity($elder,'assistant_used');
@@ -480,6 +507,8 @@ final class Api {
     private function localAssistantIntent(string $question,bool $caregiver): string {
         return match (true) {
             $caregiver && (bool)preg_match('/\balertas?\b/',$question) => 'help',
+            (bool)preg_match('/^(?:(?:abrir|ver|mostrar|me mostre|quero ver)\s+(?:(?:o|meu)\s+)?|meu\s+)?calendario[.!? ]*$/',$question) => 'calendar',
+            !$caregiver && (bool)preg_match('/\b(estou bem hoje|avisar.*que estou bem)\b/',$question) => 'check_in',
             (bool)preg_match('/\b(dor|dores|doendo)\b/',$question) => 'pain',
             (bool)preg_match('/(ja tomei|tomei o|tomei a|confirmar dose)/',$question) => 'confirm_dose',
             (bool)preg_match('/(proxim[oa].*(remedio|dose|medicamento))|(remedio|dose|medicamento).*(proxim[oa])/',$question) => 'next_dose',

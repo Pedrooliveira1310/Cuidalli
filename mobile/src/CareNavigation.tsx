@@ -27,7 +27,7 @@ const account: Entry[] = [
   { screen: "Vínculos", label: "Vínculos", icon: "link" },
   { screen: "Meus dados", label: "Meus dados", icon: "person" },
 ];
-const careScreens = [...routine, ...account].map(item => item.screen);
+const careScreens = [...routine, ...account].map(item => item.screen).concat("Calendário");
 const navy = "#123449";
 const pale = "#D0E3F8";
 const accent = "#8CE1D1";
@@ -190,16 +190,17 @@ export function CareTabs({caregiver,screen,onNavigate}:NavigationProps) {
       {primary(caregiver).map(item=>{
         const selected=isSelected(item,screen);
         const emergency=item.screen==="SOS";
-        const ink=emergency?colors.red:selected?colors.blue:colors.dark;
+        const chat=item.screen==="Assistente";
+        const ink=chat?"#FFF":emergency?colors.red:selected?colors.blue:colors.dark;
         return (
           <Pressable key={item.screen} accessibilityRole="tab" accessibilityLabel={item.label}
             accessibilityState={{selected}} aria-selected={selected} onPress={()=>onNavigate(item.screen)}
             style={({pressed})=>[
               styles.dockItem,
-              {backgroundColor:emergency?(selected||pressed?"#FDE5E7":"#FFF5F5"):selected||pressed?colors.light:"transparent"},
+              {backgroundColor:chat?(pressed?"#164F3F":colors.green):emergency?(selected||pressed?"#FDE5E7":"#FFF5F5"):selected||pressed?colors.light:"transparent"},
             ]}>
             <AppIcon name={item.icon} size={23} color={ink}/>
-            <Text style={{fontSize:14,color:ink,fontWeight:selected||emergency?"700":"500"}}>{item.label}</Text>
+            <Text style={{fontSize:14,color:ink,fontWeight:selected||emergency||chat?"700":"500"}}>{item.label}</Text>
           </Pressable>
         );
       })}

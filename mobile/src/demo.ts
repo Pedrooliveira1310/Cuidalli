@@ -31,6 +31,7 @@ type DemoState = {
   linked: boolean;
   link: {code: string; expiresAt: number} | null;
   lastActivity: {created_at: string} | null;
+  checkInAt?: number;
   hours: number;
   medications: Medication[];
   appointments: Appointment[];
@@ -130,6 +131,9 @@ function find<T extends RecordId>(items: T[],id: number): T {
   if (!item) throw new DemoRequestError(404,"Registro de demonstração não encontrado.");
   return item;
 }
+function checkInRemaining(state:DemoState) {
+  return Math.max(0,Math.ceil(((state.checkInAt??0)+900000-Date.now())/1000));
+}
 function dashboard(state: DemoState) {
   const date = todaySP();
   const doses = state.medications
@@ -140,6 +144,7 @@ function dashboard(state: DemoState) {
     }))).sort((a,b)=>a.time.localeCompare(b.time));
   return {
     date,elder:state.users.elder,last_activity:state.lastActivity,doses,
+    check_in_remaining_seconds:checkInRemaining(state),
     alerts:state.alerts,
     appointments:state.appointments.filter(item=>!item.cancelled && dateInSaoPaulo(item.scheduled_at)===date),
     dose_history:state.doses,
@@ -211,6 +216,12 @@ function answer(state: DemoState,role: Role,content: string) {
   if (/\b(sos|ajuda|socorro|emergencia|alertas?)\b/.test(query)) {
     action = role==="elder" ? "SOS" : "Alertas";
     reply = role==="elder" ? "Abra o SOS para registrar um pedido de ajuda de exemplo." : "Abra Alertas para acompanhar os pedidos de ajuda de exemplo.";
+  } else if (/\bcalendario\b/.test(query)) {
+    action = role==="elder"?"Calendário":"Consultas";
+    reply = "Você pode ver os dias com consultas cadastradas na demonstração.";
+  } else if (role==="elder" && /estou bem hoje|avisar.*que estou bem/.test(query)) {
+    action="Início";
+    reply="Na tela Início, toque em “Estou bem hoje” para registrar um aviso de exemplo.";
   } else if (/consulta|agenda/.test(query)) {
     action = "Consultas";
     reply = "Abra Consultas para ver os atendimentos cadastrados na demonstração.";
@@ -227,7 +238,7 @@ function answer(state: DemoState,role: Role,content: string) {
   }
   const id=state.nextId++;
   state.messages.push({id,content,reply});
-  return {id,reply,action,confirmation_doses,date:summary.date};
+  return {id,reply,action,confirmation_doses,date:summary.date,mode:"demo"};
 }
 
 function dispatch(state: DemoState,role: Role,path: string,method: string,data: Data) {
@@ -279,8 +290,11 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
     case "contacts": return method==="GET" ? {items:state.contacts} : saveContact(state,id,method,data);
     case "activity":
       if (role==="elder" && method==="POST") {
+        const remaining=checkInRemaining(state);
+        if (remaining) return {message:"Seu aviso já foi enviado há pouco.",check_in_remaining_seconds:remaining};
+        state.checkInAt=Date.now();
         state.lastActivity={created_at:now()};
-        return {message:"Presença registrada."};
+        return {message:"Aviso enviado na demonstração.",check_in_remaining_seconds:900};
       }
       break;
     case "settings":

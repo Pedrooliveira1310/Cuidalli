@@ -6,7 +6,7 @@ test('assistente e sessão web',async({page,request})=>{
  await page.goto('/');await page.getByRole('button',{name:'Já tenho conta · Entrar'}).click();await page.getByLabel('Telefone com DDD',{exact:true}).fill(phone);await page.getByLabel('Senha',{exact:true}).fill(password);await page.getByRole('button',{name:'Entrar',exact:true}).click();
  await expect(page.getByRole('tab',{name:'Assistente',exact:true})).toBeVisible();
  await page.getByRole('tab',{name:'Assistente',exact:true}).click();
- console.log('AFTER CLICK',await page.getByRole('tab',{name:'Assistente',exact:true}).getAttribute('aria-selected'));
+ await expect(page.getByRole('dialog')).toBeVisible();
  await expect(page.getByText('Seu assistente',{exact:true})).toBeVisible();
  await page.getByRole('textbox',{name:'Mensagem para o assistente'}).fill('Minhas consultas');
  await page.getByRole('button',{name:'Enviar',exact:true}).click();
