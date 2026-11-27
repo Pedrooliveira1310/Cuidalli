@@ -346,6 +346,9 @@ test("mapa conserva o ponto marcado ao girar, com observação multilinha e larg
     "tagName",
     "TEXTAREA",
   );
+  await page.getByRole("button",{name:"Voltar · Voltar ao corpo",exact:true}).click();
+  await expect(page.getByText("2 regiões marcadas",{exact:true})).toBeVisible();
+  await expect(page.getByTestId("pain-body-map").getByRole("button",{name:"Abdômen",exact:true})).toHaveAttribute("aria-pressed","true");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

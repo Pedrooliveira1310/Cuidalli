@@ -4,12 +4,15 @@ import {Pressable, Text, View} from "react-native";
 export const ElderLayout = createContext(false);
 export const ElderViewport = createContext(0);
 
-export function ElderPages({children, label = "Página", jump}: {children: React.ReactNode; label?: string; jump?: {index:number}}) {
+export function ElderPages({children, label = "Página", jump, onPageChange}: {
+  children: React.ReactNode; label?: string; jump?: {index:number}; onPageChange?:(index:number)=>void;
+}) {
   const compact = useContext(ElderLayout);
   const [selected, setSelected] = useState(0);
   useEffect(() => { if (jump) setSelected(jump.index); }, [jump]);
   const pages = React.Children.toArray(children);
   const index = Math.min(selected, Math.max(0, pages.length - 1));
+  useEffect(()=>onPageChange?.(index),[index,onPageChange]);
   if (!compact || pages.length < 2) return <>{children}</>;
   return <View style={{gap: 8}}>
     <View style={{gap: 8}}>{pages[index]}</View>

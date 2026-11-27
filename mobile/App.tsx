@@ -1040,9 +1040,11 @@ function BodyMap({disabled = false, view, selectedRegions, onSelect, onIntimate,
   );
 }
 
-function Pains({ elder, user }: { elder: number; user: User }) {
+function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>void }) {
   const [intimate, setIntimate] = useState(false);
   const [anatomy, setAnatomy] = useState<"male"|"female"|null>(null);
+  const [step,setStep]=useState(0);
+  const [stepJump,setStepJump]=useState<{index:number}>();
   const {width, height} = useWindowDimensions();
   const shortWide = height < 460 && width >= 560;
   const path = `/elders/${elder}/pains`,
@@ -1074,7 +1076,21 @@ function Pains({ elder, user }: { elder: number; user: User }) {
     setIntimate(false);
     setAnatomy(null);
     setMessage("");
+    setStep(0);
+    setStepJump(undefined);
     setCreating(true);
+  }
+  const returnToBody=creating && (step>0 || intimate);
+  function backInPains() {
+    if (busy) return;
+    if (returnToBody) {
+      setIntimate(false);
+      setStepJump({index:0});
+    } else if (creating) {
+      setCreating(false);
+    } else {
+      onBack();
+    }
   }
   async function seen(id: number) {
     if (busy) return;
@@ -1092,6 +1108,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
   return (
     <FormBusy.Provider value={busy}>
       <>
+        {user.role==="elder" && <BackButton label={returnToBody?"Voltar ao corpo":"Voltar"} onPress={backInPains}/>}
         {!creating && <Text style={s.title}>Registro de dores</Text>}
         {!!message && (
           <Text accessibilityRole="alert" style={s.text}>
@@ -1105,7 +1122,7 @@ function Pains({ elder, user }: { elder: number; user: User }) {
           <Loading state={state} refresh={user.role === "caregiver"} />
         ) : creating ? (
           <>
-            <ElderPages label="Etapa">
+            <ElderPages label="Etapa" jump={stepJump} onPageChange={setStep}>
               <View style={{gap:8,flexDirection:shortWide?"row":"column",alignItems:shortWide?"center":"stretch"}}>
                 <View style={{gap:8,flex:shortWide?1:undefined}}>
                   <Text style={s.subtitle}>Onde dói?</Text>
@@ -2002,7 +2019,7 @@ export default function App() {
     else if (tab === "Alertas" && caregiver)
       screen = <Alerts key={elder} elder={elder} caregiver showFilters />;
     else if (tab === "Dores")
-      screen = <Pains key={elder} elder={elder} user={user} />;
+      screen = <Pains key={elder} elder={elder} user={user} onBack={goBack} />;
     else
       screen = (
         <Resources
@@ -2097,7 +2114,7 @@ export default function App() {
                     <CareSubject elder={elder} onOpen={()=>setTab("Vínculos")}/>
                   </View>
                 )}
-                {tab !== "Início" && !(elderLayout && ["Cuidados","SOS","Assistente"].includes(tab)) && <BackButton onPress={goBack} />}
+                {tab !== "Início" && !(elderLayout && ["Cuidados","SOS","Assistente","Dores"].includes(tab)) && <BackButton onPress={goBack} />}
                 {!demo&&<Reminders user={user} navigate={setTab} onRecorded={()=>setDoseRevision(value=>value+1)} />}
                 {elderLayout && tab !== "Início"
                   ? <View testID="elder-screen" style={{marginVertical:"auto",flexShrink:0,gap:height < 640 ? 8 : 14}}>{screen}</View>
