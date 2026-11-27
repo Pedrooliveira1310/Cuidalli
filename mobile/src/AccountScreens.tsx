@@ -22,8 +22,8 @@ export function AccountProfile({user,onSaved}:{user:User;onSaved:(user:User)=>vo
   <Text style={s.title}>Alterar senha</Text>
   <Form fields={[
     {key:'current_password',label:'Senha atual',secure:true},
-    {key:'password',label:'Nova senha',secure:true},
-    {key:'confirm_password',label:'Confirme a nova senha',secure:true},
+    {key:'password',label:'Nova senha',secure:true,newPassword:true},
+    {key:'confirm_password',label:'Confirme a nova senha',secure:true,newPassword:true},
   ]} submit="Salvar nova senha" onCancel={()=>setChangingPassword(false)} onSave={async v=>{
     const result=await api('/me/password','POST',v);
     setMessage(result.message);
@@ -46,6 +46,6 @@ export function PasswordRecovery({onBack}:{onBack:()=>void}){
  <Text style={s.text}>{done?'Sua senha foi alterada. Use a nova senha para entrar.':sent?'Confira sua caixa de entrada e a pasta de spam. O código tem seis números e vale por 10 minutos.':'Informe o e-mail cadastrado na sua conta. Enviaremos um código para você criar uma nova senha.'}</Text>
  {!!message&&<Text style={s.text} accessibilityRole="alert">{message}</Text>}
  {!sent&&!done&&<Form fields={[{key:'email',label:'E-mail cadastrado'}]} submit="Receber código por e-mail" onSave={async v=>{const r=await api('/auth/forgot-password','POST',v);setEmail(v.email);setMessage(r.message);setSent(true);}}/>}
- {sent&&!done&&<><Form fields={[{key:'recovery_code',label:'Código de seis números',numeric:true},{key:'password',label:'Nova senha',secure:true}]} submit="Salvar nova senha" onSave={async v=>{const r=await api('/auth/reset-password','POST',{...v,email});setMessage(r.message);setDone(true);}}/><Button label="Usar outro e-mail ou solicitar novo código" tone="light" onPress={()=>{setSent(false);setMessage('');}}/></>}
+ {sent&&!done&&<><Form fields={[{key:'recovery_code',label:'Código de seis números',numeric:true},{key:'password',label:'Nova senha',secure:true,newPassword:true}]} submit="Salvar nova senha" onSave={async v=>{const r=await api('/auth/reset-password','POST',{...v,email});setMessage(r.message);setDone(true);}}/><Button label="Usar outro e-mail ou solicitar novo código" tone="light" onPress={()=>{setSent(false);setMessage('');}}/></>}
  {done&&<Button label="Entrar na minha conta" onPress={onBack}/>}</>;
 }

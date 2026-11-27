@@ -22,7 +22,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
     "E-mail para recuperação": "e2e"+suffix+"@example.com",
     Nascimento: "1960-05-01",
     "Telefone com DDD": elderPhone,
-    "Senha (8 a 72 caracteres)": password,
+    "Senha": password,
     "Nome do contato de emergência": "Contato fictício",
     "Telefone do contato com DDD": "11900000000",
     "Parentesco do contato": "Filho",
@@ -143,6 +143,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await caregiver.getByRole("tab", { name: "Cuidados", exact: true }).click();
   await caregiver.getByRole("button", { name: "Dores", exact: true }).click();
   await expect(caregiver.getByText("4/10 · Joelho esquerdo")).toBeVisible();
+  await expect(caregiver.getByTestId("pain-location-preview")).toBeVisible();
   await caregiver
     .getByRole("button", { name: "Marcar como visto", exact: true })
     .click();

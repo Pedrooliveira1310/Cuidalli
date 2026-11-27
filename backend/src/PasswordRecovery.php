@@ -6,9 +6,9 @@ final class PasswordRecovery {
   $email=strtolower(trim(is_string($data['email']??null)?$data['email']:''));
   if(strlen($email)>254||!filter_var($email,FILTER_VALIDATE_EMAIL))throw new ApiError(422,'Informe um e-mail válido.');
   if($path==='/auth/forgot-password')return $this->request($email);
-  $code=$data['recovery_code']??'';$password=$data['password']??'';if(is_string($password))$password=trim($password);
+  $code=$data['recovery_code']??'';
   if(!is_string($code)||!preg_match('/^\d{6}$/',$code))throw new ApiError(422,'Digite os seis números enviados por e-mail.');
-  if(!is_string($password)||preg_match_all('/./us',$password)<8||strlen($password)>72)throw new ApiError(422,'Use uma senha com ao menos 8 caracteres e no máximo 72 bytes.');
+  $password=PasswordPolicy::validate($data['password']??null);
   $this->db->beginTransaction();
   try {
    $q=$this->db->prepare('SELECT id FROM users WHERE email=? FOR UPDATE');$q->execute([$email]);$id=$q->fetchColumn();

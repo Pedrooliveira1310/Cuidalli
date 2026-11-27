@@ -7,9 +7,33 @@ $db=database();$api=new Api($db);$count=0;$suffix=(string)random_int(10000000,99
 function ok(bool $value,string $label):void{global $count;if(!$value)throw new RuntimeException($label);echo 'OK '.(++$count).' '.$label."\n";}
 function callApi(string $method,string $path,array $data=[],string $token='',int $expected=200):array{global $api;try{$r=$api->dispatch($method,$path,$data,$token?'Bearer '.$token:'','account-test-'.getmypid());if($expected>=400)throw new RuntimeException('Esperado erro '.$expected);return $r;}catch(ApiError $e){ok($e->status===$expected,$path.' protege operação ('.$expected.')');return [];}}
 $email='elder'.$suffix.'@example.com';$phone='119'.$suffix;
+foreach (['1999-01-01',(new DateTimeImmutable('+1 year'))->format('Y-m-d')] as $birth) {
+ callApi('POST','/auth/register',['role'=>'elder','name'=>'Idoso teste','phone'=>$phone,'email'=>$email,'password'=>$password,'birth_date'=>$birth,
+  'emergency_contact'=>['name'=>'Contato','phone'=>'118'.$suffix,'relationship'=>'Teste']],'',422);
+}
 $elder=callApi('POST','/auth/register',['role'=>'elder','name'=>'Idoso teste','phone'=>$phone,'email'=>$email,'password'=>$password,'birth_date'=>'1960-01-01','emergency_contact'=>['name'=>'Contato','phone'=>'118'.$suffix,'relationship'=>'Teste']])['id'];
 $et=callApi('POST','/auth/login',['phone'=>$phone,'password'=>$password])['token'];
 ok(callApi('GET','/me',[],$et)['user']['email']===$email,'E-mail persiste no cadastro');
+$otherSession=callApi('POST','/auth/login',['email'=>$email,'password'=>$password])['token'];
+callApi('POST','/me/password',['current_password'=>$password,'password'=>'senha123','confirm_password'=>'senha123'],$et,422);
+$strong='Cuidali-Troca92';
+callApi('POST','/me/password',['current_password'=>$password,'password'=>$strong,'confirm_password'=>$strong],$et);
+ok(callApi('GET','/me',[],$et)['user']['email']===$email,'Troca de senha mantém a sessão atual');
+callApi('GET','/me',[],$otherSession,401);
+callApi('POST','/auth/login',['phone'=>$phone,'password'=>$password],'',401);
+$password=$strong;
+ok(isset(callApi('POST','/auth/login',['email'=>$email,'password'=>$password])['token']),'Senha nova funciona no acesso por e-mail');
+$db->prepare('INSERT INTO rate_limits(bucket,attempts,reset_at) VALUES(?,99,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 15 MINUTE))')->execute([hash('sha256','assistant:'.$elder)]);
+ok(isset(callApi('POST',"/elders/$elder/assistant",['message'=>'Olá'],$et)['reply']),'Assistente ignora bloqueios de 15 minutos gravados pela versão anterior');
+$pain=['type'=>'Pontada','intensity'=>4,'onset'=>'Hoje'];
+$abdominal=['view'=>'front','region'=>'abdomen'];
+$back=['view'=>'back','region'=>'lower_back'];
+callApi('POST',"/elders/$elder/pains",$pain+['locations'=>[$abdominal,['view'=>'front','region'=>'anus']]],$et,422);
+ok(callApi('GET',"/elders/$elder/pains",[],$et)['items']===[],'Lote inválido não grava regiões parciais');
+$result=callApi('POST',"/elders/$elder/pains",$pain+['locations'=>[$abdominal,$back,$abdominal]],$et);
+ok(count($result['ids'])===2,'Uma seleção grava duas regiões e elimina duplicatas');
+$saved=callApi('GET',"/elders/$elder/pains",[],$et)['items'];
+ok(array_column($saved,'region')===['lower_back','abdomen'],'Mapa mantém as vistas e regiões selecionadas');
 callApi('PATCH','/me',['name'=>'Nome editado','birth_date'=>'1960-01-01','phone'=>$phone,'email'=>$email],$et);
 ok(callApi('GET','/me',[],$et)['user']['name']==='Nome editado','Nome editado persiste');
 callApi('PATCH','/me',['name'=>'Nome editado','birth_date'=>'1960-01-01','phone'=>$phone,'email'=>'novo'.$email,'current_password'=>'incorreta'],$et,403);

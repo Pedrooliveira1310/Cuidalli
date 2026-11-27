@@ -331,10 +331,13 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
         return {message:"Visualização registrada."};
       }
       if (!seen && role==="elder") {
-        state.pains.unshift({id:state.nextId++,view:value(data,"view"),region:value(data,"region"),type:value(data,"type"),
-          intensity:Number(data.intensity),onset:value(data,"onset"),notes:value(data,"notes"),created_at:now(),views:[]});
+        const locations=Array.isArray(data.locations)?data.locations:[data];
+        for (const location of locations) {
+          state.pains.unshift({id:state.nextId++,view:value(location,"view"),region:value(location,"region"),type:value(data,"type"),
+            intensity:Number(data.intensity),onset:value(data,"onset"),notes:value(data,"notes"),created_at:now(),views:[]});
+        }
         state.alerts.unshift({id:state.nextId++,kind:"pain",status:"open",created_at:now()});
-        return {message:"Dor registrada na demonstração."};
+        return {message:locations.length===1?"Dor registrada na demonstração.":"Dores registradas na demonstração."};
       }
       break;
     case "assistant":

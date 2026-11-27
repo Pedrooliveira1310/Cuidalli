@@ -35,7 +35,14 @@ test("telefone: filtro compartilhado preserva formatação e remove letras digit
   for (const char of "a+55b (11)c 99999-0000")
     typed = validation.filterPhone(typed + char);
   assert.equal(typed, "+55 (11) 99999-0000");
+  assert.equal(validation.filterPhone("+123 (45) 67890-123456789"), "+123 (45) 67890-12345");
   assert.equal(validation.filterCode("aZb!cd12345678xxxx"), "ABCD12345678");
+});
+test("senha nova exige força sem bloquear senhas antigas no login", () => {
+  assert.equal(validation.passwordError("antiga82", false), "");
+  assert.equal(validation.passwordError("antiga82", true), validation.passwordHelp);
+  assert.equal(validation.passwordError("Palavra longa!", true), "");
+  assert.equal(validation.passwordError("123456789012", true), validation.passwordHelp);
 });
 test("datas brasileiras e ISO, impossíveis, bissextos e máscaras nativas", () => {
   assert.equal(validation.isoDate("29/02/2024"), "2024-02-29");

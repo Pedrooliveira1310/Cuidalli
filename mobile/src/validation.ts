@@ -1,6 +1,26 @@
 /** Shared by web and native: keyboard hints never replace input filtering. */
-export const filterPhone = (value: string) =>
-  value.replace(/[^0-9+() .-]/g, "");
+export const PHONE_MAX_DIGITS = 15;
+export function filterPhone(value: string) {
+  const allowed = value.replace(/[^0-9+() .-]/g, "");
+  let digits = 0;
+  for (let index = 0; index < allowed.length; index++) {
+    if (/[0-9]/.test(allowed[index]) && ++digits > PHONE_MAX_DIGITS)
+      return allowed.slice(0, index).trimEnd();
+  }
+  return allowed;
+}
+export const passwordHelp = "Use 12 ou mais caracteres, com letras e um número ou símbolo.";
+export function passwordError(value: string, newPassword: boolean) {
+  const characters = Array.from(value);
+  const bytes = characters.reduce((length, character) => {
+    const code = character.codePointAt(0)!;
+    return length + (code > 0xffff ? 4 : code > 0x7ff ? 3 : code > 0x7f ? 2 : 1);
+  }, 0);
+  if (bytes > 72) return "A senha pode ocupar até 72 bytes.";
+  if (newPassword && (characters.length < 12 || !/\p{L}/u.test(value) || !/[\p{N}\p{P}\p{S}]/u.test(value) || /\p{Cc}/u.test(value)))
+    return passwordHelp;
+  return "";
+}
 export const filterCode = (value: string) =>
   value
     .replace(/[^a-f0-9]/gi, "")
@@ -31,6 +51,11 @@ export const todaySP = () =>
   new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Sao_Paulo" }).format(
     new Date(),
   );
+export function latestBirthDate(minimumAge = 0) {
+  const [year,month,day]=todaySP().split("-");
+  const eligibleYear=Number(year)-minimumAge;
+  return isoDate(`${eligibleYear}-${month}-${day}`) ?? `${eligibleYear}-02-28`;
+}
 export function numericMask(
   value: string,
   kind: "date" | "datetime-local" | "time",

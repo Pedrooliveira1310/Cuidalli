@@ -112,7 +112,7 @@ test("inputs web, telefone digitado/colado, autocomplete e senha visível", asyn
     "type",
     "date",
   );
-  const password = page.getByLabel("Senha (8 a 72 caracteres)", {
+  const password = page.getByLabel("Senha", {
     exact: true,
   });
   await expect(password).toHaveAttribute("autocomplete", "new-password");
@@ -330,7 +330,7 @@ test("mapa conserva o ponto marcado ao girar, com observação multilinha e larg
   await page
     .getByRole("button", { name: "Registrar uma dor", exact: true })
     .click();
-  await expect(page.getByText("Selecione a região que dói.", {exact:true})).toBeVisible();
+  await expect(page.getByText("Toque no corpo para marcar a dor.", {exact:true})).toBeVisible();
   await page
     .getByRole("button", { name: "Abdômen", exact: true })
     .first()
@@ -338,9 +338,10 @@ test("mapa conserva o ponto marcado ao girar, com observação multilinha e larg
   await page.getByRole("button", { name: "Costas", exact: true }).click();
   await expect(page.getByText("Local: Abdômen · Frente", {exact:true})).toBeVisible();
   await page.getByTestId("pain-body-map").getByRole("button", {name:"Lombar",exact:true}).click();
-  await expect(page.getByText("Local: Lombar", {exact:true})).toBeVisible();
+  await expect(page.getByText("2 regiões marcadas", {exact:true})).toBeVisible();
   await page.getByRole("button", { name: "Frente", exact: true }).click();
-  await expect(page.getByText("Local: Lombar · Costas", {exact:true})).toBeVisible();
+  await expect(page.getByTestId("pain-body-map").getByRole("button",{name:"Abdômen",exact:true})).toHaveAttribute("aria-pressed","true");
+  await expect(page.getByText("2 regiões marcadas", {exact:true})).toBeVisible();
   await expect(await advanceTo(page,page.getByLabel("Observação", { exact: true }))).toHaveJSProperty(
     "tagName",
     "TEXTAREA",

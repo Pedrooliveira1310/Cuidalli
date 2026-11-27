@@ -34,16 +34,26 @@ final class Api {
         if (!$d || substr($v,0,4)==='0000' || $d->format('Y-m-d')!==$v) $this->fail(422,"Data inválida: ".$this->label($key).". Use AAAA-MM-DD.");
         return $v;
     }
+    private function validateBirthDate(string $birth,string $role): void {
+        $timezone=new DateTimeZone('America/Sao_Paulo');
+        $today=new DateTimeImmutable('today',$timezone);
+        if ($birth<'1900-01-01' || $birth>$today->format('Y-m-d')) $this->fail(422,'Data de nascimento inválida.');
+        if ($role==='elder' && $today->diff(new DateTimeImmutable($birth,$timezone))->y<60)
+            $this->fail(422,'O perfil de pessoa idosa é para quem já completou 60 anos.');
+    }
     private function enum(array $data,string $key,array $values): string {
         $v=$this->text($data,$key,100);
         if (!in_array($v,$values,true)) $this->fail(422,"Opção inválida: ".$this->label($key).".");
         return $v;
     }
     private function role(string $role): void { if ($this->user['role']!==$role) $this->fail(403,'Seu perfil não pode realizar esta operação.'); }
-    private function rate(string $key,int $max): void {
+    private function withinRate(string $key,int $max,int $seconds): bool {
         $bucket=hash('sha256',$key);
-        $this->query('INSERT INTO rate_limits(bucket,attempts,reset_at) VALUES(?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 15 MINUTE)) ON DUPLICATE KEY UPDATE attempts=IF(reset_at<=UTC_TIMESTAMP(),1,attempts+1),reset_at=IF(reset_at<=UTC_TIMESTAMP(),DATE_ADD(UTC_TIMESTAMP(),INTERVAL 15 MINUTE),reset_at)',[$bucket]);
-        if ((int)$this->query('SELECT attempts FROM rate_limits WHERE bucket=?',[$bucket])->fetchColumn()>$max) $this->fail(429,'Muitas tentativas. Aguarde 15 minutos.');
+        $this->query("INSERT INTO rate_limits(bucket,attempts,reset_at) VALUES(?,1,DATE_ADD(UTC_TIMESTAMP(),INTERVAL $seconds SECOND)) ON DUPLICATE KEY UPDATE attempts=IF(reset_at<=UTC_TIMESTAMP(),1,attempts+1),reset_at=IF(reset_at<=UTC_TIMESTAMP(),DATE_ADD(UTC_TIMESTAMP(),INTERVAL $seconds SECOND),reset_at)",[$bucket]);
+        return (int)$this->query('SELECT attempts FROM rate_limits WHERE bucket=?',[$bucket])->fetchColumn()<=$max;
+    }
+    private function rate(string $key,int $max): void {
+        if (!$this->withinRate($key,$max,900)) $this->fail(429,'Muitas tentativas. Aguarde 15 minutos.');
     }
     private function activity(int $elder,string $action): void {
         $this->query('INSERT INTO activities(elder_id,actor_id,action) VALUES(?,?,?)',[$elder,$this->user['id'],$action]);
@@ -134,8 +144,8 @@ final class Api {
     }
     private function editProfile(array $data):array {
         $name=$this->text($data,'name');$birth=$this->date($data,'birth_date');$phone=$this->phone($data);$email=$this->email($data);
-        if($birth<'1900-01-01'||$birth>date('Y-m-d'))$this->fail(422,'Data de nascimento inválida.');
         $q=$this->query('SELECT * FROM users WHERE id=?',[$this->user['id']]);$old=$q->fetch();
+        $this->validateBirthDate($birth,$birth===$old['birth_date']?'':$this->user['role']);
         if($phone!==$old['phone']||$email!==$old['email']){
             $password=$this->text($data,'current_password',72);
             if(!password_verify($password,$old['password_hash']))$this->fail(403,'Confira sua senha atual para alterar telefone ou e-mail.');
@@ -147,8 +157,7 @@ final class Api {
     private function changePassword(array $data,string $sessionHash): array {
         $this->rate('change-password:'.$this->user['id'],8);
         $current=$this->text($data,'current_password',72);
-        $password=$this->text($data,'password',72);
-        if ($this->length($password)<8) $this->fail(422,'A nova senha deve ter ao menos 8 caracteres e no máximo 72 bytes.');
+        $password=PasswordPolicy::validate($data['password']??null);
         if ($password===$current) $this->fail(422,'Escolha uma senha diferente da atual.');
         if (!is_string($data['confirm_password']??null) || trim($data['confirm_password'])!==$password) $this->fail(422,'As novas senhas não coincidem.');
         $id=$this->user['id'];
@@ -166,9 +175,8 @@ final class Api {
     private function register(array $data,string $ip): array {
         $this->rate('register:'.$ip,20);
         $role=$this->enum($data,'role',['elder','caregiver']); $name=$this->text($data,'name'); $birth=$this->date($data,'birth_date');
-        if ($birth>(new DateTimeImmutable('now',new DateTimeZone('America/Sao_Paulo')))->format('Y-m-d') || $birth<'1900-01-01') $this->fail(422,'Data de nascimento inválida.');
-        $phone=$this->phone($data); $password=$this->text($data,'password',72);
-        if ($this->length($password)<8) $this->fail(422,'A senha deve ter ao menos 8 caracteres e no máximo 72 bytes.');
+        $this->validateBirthDate($birth,$role);
+        $phone=$this->phone($data); $password=PasswordPolicy::validate($data['password']??null);
         $email=$this->email($data);
         $contact=null;
         if ($role==='elder') {
@@ -305,20 +313,38 @@ final class Api {
             return ['items'=>$items];
         }
         $this->role('elder'); if ($method!=='POST'||$id) $this->fail(405,'Método não permitido.');
-        $view=$this->enum($data,'view',['front','back']);
-        $region=$this->enum($data,'region',['head','chest','abdomen','upper_back','lower_back','left_shoulder','right_shoulder','left_arm','right_arm','left_hand','right_hand','left_hip','right_hip','left_leg','right_leg','left_knee','right_knee','left_foot','right_foot','penis','scrotum','vulva','perineum','anus']);
-        if ((in_array($region,['penis','scrotum','vulva','perineum'],true) && $view!=='front') || ($region==='anus' && $view!=='back'))
-            $this->fail(422,'Selecione a vista correspondente à região.');
+        $locations=array_key_exists('locations',$data)?$data['locations']:[$data];
+        if (!is_array($locations) || !array_is_list($locations) || !$locations || count($locations)>40)
+            $this->fail(422,'Selecione pelo menos uma região no corpo.');
+        $points=[];
+        foreach ($locations as $location) {
+            if (!is_array($location)) $this->fail(422,'Região inválida.');
+            $view=$this->enum($location,'view',['front','back']);
+            $region=$this->enum($location,'region',['head','chest','abdomen','upper_back','lower_back','left_shoulder','right_shoulder','left_arm','right_arm','left_hand','right_hand','left_hip','right_hip','left_leg','right_leg','left_knee','right_knee','left_foot','right_foot','penis','scrotum','vulva','perineum','anus']);
+            if ((in_array($region,['penis','scrotum','vulva','perineum'],true) && $view!=='front') || ($region==='anus' && $view!=='back'))
+                $this->fail(422,'Selecione a vista correspondente à região.');
+            $points[$view.':'.$region]=[$view,$region];
+        }
         $type=$this->enum($data,'type',['Pontada','Queimação','Latejante','Aperto / peso','Formigamento','Constante']);
         $intensity=$data['intensity']??null;
         if (!is_int($intensity)||$intensity<1||$intensity>10) $this->fail(422,'Intensidade deve ser um inteiro de 1 a 10.');
         $onset=$this->enum($data,'onset',['Hoje','Alguns dias','Mais de 1 semana']);
         $notes=$data['notes']??'';
         if (!is_string($notes)||$this->length($notes)>1000) $this->fail(422,'Observação deve ter até 1000 caracteres.');
-        $this->query('INSERT INTO pains(elder_id,view,region,type,intensity,onset,notes) VALUES(?,?,?,?,?,?,?)',[$elder,$view,$region,$type,$intensity,$onset,$notes]);
-        $id=(int)$this->db->lastInsertId(); $this->activity($elder,'pain_recorded'); http_response_code(201);
-        $this->query("INSERT INTO care_alerts(elder_id,kind,episode_key) VALUES(?,'pain',?)",[$elder,'pain:'.$id]);
-        return ['id'=>$id,'message'=>'Dor registrada. Seus cuidadores podem acompanhar o registro e o alerta.'];
+        $ids=$this->transaction(function() use ($elder,$points,$type,$intensity,$onset,$notes) {
+            $ids=[];
+            foreach ($points as [$view,$region]) {
+                $this->query('INSERT INTO pains(elder_id,view,region,type,intensity,onset,notes) VALUES(?,?,?,?,?,?,?)',[$elder,$view,$region,$type,$intensity,$onset,$notes]);
+                $ids[]=(int)$this->db->lastInsertId();
+            }
+            $this->activity($elder,'pain_recorded');
+            $this->query("INSERT INTO care_alerts(elder_id,kind,episode_key) VALUES(?,'pain',?)",[$elder,'pain:'.$ids[0]]);
+            return $ids;
+        });
+        http_response_code(201);
+        return ['id'=>$ids[0],'ids'=>$ids,'message'=>count($ids)===1
+            ? 'Dor registrada. Seus cuidadores podem acompanhar o registro e o alerta.'
+            : 'Dores registradas. Seus cuidadores podem acompanhar os locais marcados.'];
     }
     private function dashboard(int $elder): array {
         $this->scanInactivity($elder);
@@ -399,7 +425,10 @@ final class Api {
         if ($resource==='assistant') {
             if ($method==='GET') return ['items'=>array_reverse($this->query('SELECT * FROM assistant_messages WHERE elder_id=? ORDER BY id DESC LIMIT 30',[$elder])->fetchAll()),'ai_available'=>AssistantIntent::available(),'ai_provider'=>AssistantIntent::provider()];
             if ($method!=='POST') $this->fail(405,'Método não permitido.');
-            $this->rate('assistant:'.$this->user['id'],60); $message=$this->text($data,'message',500);
+            $message=$this->text($data,'message',500);
+            if (!$this->withinRate('assistant-chat:'.$this->user['id'],240,60)) {
+                $this->fail(429,'Muitas mensagens em sequência. Tente novamente em até um minuto.');
+            }
             $q=strtolower(strtr($message,['á'=>'a','à'=>'a','â'=>'a','ã'=>'a','é'=>'e','ê'=>'e','í'=>'i','ó'=>'o','ô'=>'o','õ'=>'o','ú'=>'u','ç'=>'c','Á'=>'a','À'=>'a','Â'=>'a','Ã'=>'a','É'=>'e','Ê'=>'e','Í'=>'i','Ó'=>'o','Ô'=>'o','Õ'=>'o','Ú'=>'u','Ç'=>'c'])); $action=null; $confirmationDoses=[];
             $caregiver=$this->user['role']==='caregiver';
             $assistantOptions=$caregiver
@@ -407,7 +436,8 @@ final class Api {
                 : 'Posso consultar seus medicamentos e consultas, informar a data e a hora atuais ou ajudar a abrir Dores e SOS.';
             $urgent=preg_match('/\b(sos|socorro|emergencia|urgente)\b|preciso de ajuda/',$q);
             $previousMessage=isset($data['previous_message']) ? $this->text($data,'previous_message',500) : null;
-            $aiAnswer=$urgent ? null : AssistantIntent::respond($message,$previousMessage);
+            $aiAnswer=!$urgent && AssistantIntent::available() && $this->withinRate('assistant-ai:'.$this->user['id'],60,60)
+                ? AssistantIntent::respond($message,$previousMessage) : null;
             $intent=$urgent ? 'help' : ($aiAnswer['intent'] ?? $this->localAssistantIntent($q,$caregiver));
             if ($caregiver && $intent==='help') {
                 $reply='Abra Alertas para acompanhar os pedidos de ajuda da pessoa idosa.'; $action='Alertas';

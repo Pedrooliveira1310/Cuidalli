@@ -25,6 +25,9 @@ import {
   validTime,
   todaySP,
   numericMask,
+  passwordError,
+  passwordHelp,
+  latestBirthDate,
 } from "./validation";
 export const FormBusy = createContext(false);
 export function BackButton({onPress,label='Voltar'}:{onPress:()=>void;label?:string}) {
@@ -157,6 +160,8 @@ export type Field = {
   label: string;
   placeholder?: string;
   secure?: boolean;
+  newPassword?: boolean;
+  birthMinAge?: number;
   phone?: boolean;
   numeric?: boolean;
   optional?: boolean;
@@ -276,6 +281,8 @@ export function Form({
           payload[f.key] = d;
           if (f.key === "birth_date" && (d < "1900-01-01" || d > todaySP()))
             issues[f.key] = "Nascimento deve estar entre 1900 e hoje.";
+          else if (f.key==="birth_date" && f.birthMinAge && d>latestBirthDate(f.birthMinAge))
+            issues[f.key] = `Este perfil é para quem já completou ${f.birthMinAge} anos.`;
         }
       }
       if (kindOf(f) === "datetime-local") {
@@ -283,24 +290,10 @@ export function Form({
         if (!d) issues[f.key] = "Informe data e horário válidos.";
         else payload[f.key] = d;
       }
-      if (
-        f.secure &&
-        (Array.from(raw).reduce(
-          (n, c) =>
-            n +
-            (c.codePointAt(0)! > 0xffff
-              ? 4
-              : c.codePointAt(0)! > 0x7ff
-                ? 3
-                : c.codePointAt(0)! > 0x7f
-                  ? 2
-                  : 1),
-          0,
-        ) > 72 ||
-          (f.key === "password" && ["Criar conta","Salvar nova senha"].includes(submit) && Array.from(raw).length < 8))
-      )
-        issues[f.key] =
-          "A senha deve ter ao menos 8 caracteres e no máximo 72 bytes.";
+      if (f.secure) {
+        const issue = passwordError(raw,!!f.newPassword && f.key==="password");
+        if (issue) issues[f.key] = issue;
+      }
     }
     if (
       payload.start_date &&
@@ -367,7 +360,7 @@ export function Form({
     const autoComplete = f.phone
       ? "tel"
       : f.secure
-        ? ["Criar conta","Salvar nova senha"].includes(submit)
+        ? f.newPassword
           ? "new-password"
           : "current-password"
         : f.key === "email" ? "email" : /name/.test(f.key)
@@ -417,8 +410,8 @@ export function Form({
                 ? "tel"
                 : type,
             ...(f.key === "birth_date"
-              ? { min: "1900-01-01", max: todaySP() }
-              : {}),
+              ? { min: "1900-01-01", max: latestBirthDate(f.birthMinAge) }
+              : f.key==="end_date" ? {min:isoDate(String(values.start_date??""))??undefined} : {}),
           });
     return (
       <TextInput
@@ -505,6 +498,8 @@ export function Form({
             {f.secure && (
               <Pressable accessibilityRole="button" accessibilityLabel={shown ? "Ocultar senha" : "Mostrar senha"} disabled={busy} onPress={()=>setShown(!shown)} style={{minHeight:48,alignSelf:"flex-end",justifyContent:"center",paddingHorizontal:8}}><Text style={{fontSize:16,color:colors.blue,fontWeight:"600"}}>{shown ? "Ocultar senha" : "Mostrar senha"}</Text></Pressable>
             )}
+            {f.newPassword && f.key==="password" && !errors[f.key] &&
+              <Text style={styles.muted}>{passwordHelp}</Text>}
             {!!errors[f.key] && (
               <Text accessibilityRole="alert" style={styles.error}>
                 {errors[f.key]}

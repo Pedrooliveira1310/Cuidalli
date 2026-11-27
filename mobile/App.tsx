@@ -64,7 +64,7 @@ const profileFields: Field[] = [
   { key: "birth_date", label: "Nascimento", placeholder: "DD/MM/AAAA" },
   { key: "phone", label: "Telefone com DDD", phone: true },
   { key: "email", label: "E-mail para recuperação" },
-  { key: "password", label: "Senha (8 a 72 caracteres)", secure: true },
+  { key: "password", label: "Senha", secure: true, newPassword: true },
 ];
 const contactFields: Field[] = [
   { key: "name", label: "Nome do contato" },
@@ -329,7 +329,8 @@ function Auth({onLogin,onScreenChange,wide}:{
           <Form
             key={"register" + role}
             fields={[
-              ...profileFields,
+              ...profileFields.map(field=>field.key==="birth_date" && role==="elder"
+                ? {...field,birthMinAge:60} : field),
               ...(role === "elder"
                 ? [
                     {
@@ -965,27 +966,32 @@ const bodyMapPoints = [
   ["right_foot", "left_foot", 37, 95],
 ] as const;
 
-function BodyMap({disabled = false, view, region, onSelect, onIntimate}: {
+const intimateRegions = ["penis","scrotum","vulva","perineum","anus"];
+
+function BodyMap({disabled = false, view, selectedRegions, onSelect, onIntimate, compactMap = false}: {
   view: string;
-  region: string;
-  onSelect: (region: string) => void;
+  selectedRegions: string[];
+  onSelect?: (region: string) => void;
+  onIntimate?: () => void;
   disabled?: boolean;
-  onIntimate: () => void;
+  compactMap?: boolean;
 }) {
   const compact = useContext(ElderLayout);
   const room = useContext(ElderViewport);
   const {width:windowWidth, height:windowHeight} = useWindowDimensions();
   const shortWide = windowHeight < 460 && windowWidth >= 560;
   const front = view === "front";
-  const height = compact
+  const editable=!!onSelect;
+  const height = !editable ? 156 : compactMap ? 148 : compact
     ? Math.max(130, Math.min(shortWide ? 250 : 395, (room || 500) - (shortWide ? 165 : windowHeight >= 640 ? 350 : 316)))
     : 430;
   const width = height * 0.62;
   const hitWidth = Math.min(46, height * 0.145);
   const hitHeight = Math.min(44, height * 0.102);
+  const intimateSelected=selectedRegions.some(region=>intimateRegions.includes(region));
 
   return (
-    <View testID="pain-body-map" style={{width, height, alignSelf:"center"}}>
+    <View testID={editable?"pain-body-map":"pain-location-preview"} style={{width, height, alignSelf:"center"}}>
       <Image
         accessible={false}
         pointerEvents="none"
@@ -993,17 +999,21 @@ function BodyMap({disabled = false, view, region, onSelect, onIntimate}: {
         style={{width, height}}
         resizeMode="contain"
       />
-      <Pressable accessibilityRole="button" accessibilityLabel="Região íntima"
-        accessibilityState={{selected:["penis","scrotum","vulva","perineum","anus"].includes(region),disabled}}
-        disabled={disabled} onPress={onIntimate}
+      {onIntimate ? <Pressable accessibilityRole="button" accessibilityLabel="Região íntima"
+        accessibilityState={{selected:intimateSelected,disabled}} disabled={disabled} onPress={onIntimate}
         style={{position:"absolute",left:width/2-hitWidth*.4,top:height*.49-hitHeight/2,
-          width:hitWidth*.8,height:hitHeight,alignItems:"center",justifyContent:"center",zIndex:1}}>
-        <View pointerEvents="none" style={{width:12,height:12,borderRadius:6,borderColor:"#FFF",borderWidth:2,
-          backgroundColor:["penis","scrotum","vulva","perineum","anus"].includes(region)?colors.red:colors.blue}} />
-      </Pressable>
+          width:hitWidth*.8,height:hitHeight,zIndex:1,alignItems:"center",justifyContent:"center"}}>
+        <View pointerEvents="none" style={{width:14,height:14,borderRadius:7,borderColor:"#FFF",borderWidth:2,
+          backgroundColor:intimateSelected?colors.red:colors.blue}}/>
+      </Pressable> : intimateSelected && <View pointerEvents="none"
+        style={{position:"absolute",left:width/2-7,top:height*.49-7,width:14,height:14,borderRadius:7,
+          backgroundColor:colors.red,borderColor:"#FFF",borderWidth:2}}/>}
       {bodyMapPoints.map(([frontRegion, backRegion, x, y]) => {
         const key = front ? frontRegion : backRegion;
-        const selected = key === region;
+        const selected = selectedRegions.includes(key);
+        if (!editable) return selected ? <View key={key} pointerEvents="none" style={{
+          position:"absolute",left:width*x/100-7,top:height*y/100-7,width:14,height:14,
+          borderRadius:7,backgroundColor:colors.red,borderColor:"#FFF",borderWidth:2}}/> : null;
         return (
           <Pressable
             key={key}
@@ -1011,7 +1021,7 @@ function BodyMap({disabled = false, view, region, onSelect, onIntimate}: {
             accessibilityLabel={regions[key]}
             accessibilityState={{selected, disabled}} aria-pressed={selected}
             disabled={disabled}
-            onPress={() => onSelect(key)}
+            onPress={() => onSelect?.(key)}
             style={{
               position:"absolute", left:width * x / 100 - hitWidth / 2,
               top:height * y / 100 - hitHeight / 2, width:hitWidth, height:hitHeight,
@@ -1034,26 +1044,29 @@ function Pains({ elder, user }: { elder: number; user: User }) {
   const [intimate, setIntimate] = useState(false);
   const [anatomy, setAnatomy] = useState<"male"|"female"|null>(null);
   const {width, height} = useWindowDimensions();
-  const room = useContext(ElderViewport);
-  const regionPageSize = room >= 560 ? 6 : 3;
   const shortWide = height < 460 && width >= 560;
   const path = `/elders/${elder}/pains`,
     state = useData(path),
     [creating, setCreating] = useState(false),
     [view, setView] = useState("front"),
-    [location, setLocation] = useState<{view:string;region:string}|null>(null),
+    [locations, setLocations] = useState<{view:string;region:string}[]>([]),
     [type, setType] = useState("Pontada"),
     [intensity, setIntensity] = useState<number|null>(null),
     [onset, setOnset] = useState("Hoje"),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
-  const region=location?.region ?? "";
-  const selectRegion=(region:string)=>setLocation({view,region});
-  const locationLabel=location
-    ? `Local: ${regions[region]}${view!==location.view?(location.view==="front"?" · Frente":" · Costas"):""}`
-    : "Selecione a região que dói.";
+  const selectedRegions=locations.filter(location=>location.view===view).map(location=>location.region);
+  function selectRegion(region:string) {
+    setLocations(current=>current.some(location=>location.view===view && location.region===region)
+      ? current.filter(location=>location.view!==view || location.region!==region)
+      : [...current,{view,region}]);
+  }
+  const firstLocation=locations[0];
+  const locationLabel=locations.length>1 ? `${locations.length} regiões marcadas` : firstLocation
+    ? `Local: ${regions[firstLocation.region]}${view!==firstLocation.view?(firstLocation.view==="front"?" · Frente":" · Costas"):""}`
+    : "Toque no corpo para marcar a dor.";
   function startRecord() {
-    setLocation(null);
+    setLocations([]);
     setView("front");
     setType("Pontada");
     setIntensity(null);
@@ -1076,9 +1089,6 @@ function Pains({ elder, user }: { elder: number; user: User }) {
       setBusy(false);
     }
   }
-  const selectableRegions = Object.entries(regions).filter(([key]) =>
-    !["penis","scrotum","vulva","perineum","anus"].includes(key) &&
-    (view==="front" ? !["upper_back","lower_back"].includes(key) : !["chest","abdomen"].includes(key)));
   return (
     <FormBusy.Provider value={busy}>
       <>
@@ -1096,64 +1106,33 @@ function Pains({ elder, user }: { elder: number; user: User }) {
         ) : creating ? (
           <>
             <ElderPages label="Etapa">
-{intimate ? <View style={{gap:8}}>
-  <Text accessibilityRole="header" style={s.subtitle}>Região íntima</Text>
-  {view==="front" && <View style={s.row}>
-    <Button label="Masculina" tone={anatomy==="male"?"blue":"light"} onPress={()=>setAnatomy("male")} />
-    <Button label="Feminina" tone={anatomy==="female"?"blue":"light"} onPress={()=>setAnatomy("female")} />
-  </View>}
-  <View style={s.row}>
-    {(view==="back"?["anus"]:anatomy==="male"?["penis","scrotum","perineum"]:anatomy==="female"?["vulva","perineum"]:[])
-      .map(key=><Button key={key} label={regions[key]} onPress={()=>{selectRegion(key);setIntimate(false);}} />)}
-  </View>
-  <Button label="Voltar ao corpo" tone="light" onPress={()=>setIntimate(false)} />
-</View> : <View style={{gap:8,flexDirection:shortWide?"row":"column",alignItems:shortWide?"center":"stretch"}}>
-          <View style={{gap:8,flex:shortWide?1:undefined}}>
-            <Text style={s.subtitle}>Onde dói?</Text>
-            <Text style={[s.muted,location&&{color:colors.green}]} accessibilityLiveRegion="polite">{locationLabel}</Text>
-            <View style={s.row}>
-              {[
-                ["front", "Frente"],
-                ["back", "Costas"],
-              ].map(([v, l]) => (
-                <Button
-                  key={v}
-                  label={(view === v ? "✓ " : "") + l}
-                  tone={view === v ? "blue" : "light"}
-                  onPress={() => setView(v)}
-                />
-              ))}
-            </View>
-          </View>
-            <BodyMap
-              view={view}
-              region={location?.view===view?region:""}
-              onSelect={selectRegion}
-              onIntimate={()=>setIntimate(true)}
-              disabled={busy}
-            />
-            <Pressable accessibilityRole="button" onPress={()=>setIntimate(true)} disabled={busy}
-              style={{alignSelf:"center",paddingHorizontal:12,minHeight:44,justifyContent:"center"}}>
-              <Text style={{color:colors.blue,fontWeight:"700",textDecorationLine:"underline"}}>Selecionar região íntima</Text>
-            </Pressable>
-</View>}
-<View style={{gap:8}}>
-            <Text style={s.subtitle}>{locationLabel}</Text>
-            <Text style={s.muted}>
-              Também é possível selecionar pela lista:
-            </Text>
-            <ElderPages label="Locais">
-              {Array.from({length:Math.ceil(selectableRegions.length/regionPageSize)}, (_, page) => (
-                <View key={page} style={s.row}>
-                  {selectableRegions.slice(page*regionPageSize,(page+1)*regionPageSize)
-                    .map(([key, label]) => (
-                      <Button key={key} label={(region === key && location?.view===view ? "✓ " : "") + label}
-                        tone={region === key && location?.view===view ? "blue" : "light"} onPress={() => selectRegion(key)} />
+              <View style={{gap:8,flexDirection:shortWide?"row":"column",alignItems:shortWide?"center":"stretch"}}>
+                <View style={{gap:8,flex:shortWide?1:undefined}}>
+                  <Text style={s.subtitle}>Onde dói?</Text>
+                  <Text style={[s.muted,locations.length>0&&{color:colors.green}]} accessibilityLiveRegion="polite">{locationLabel}</Text>
+                  <View style={s.row}>
+                    {([["front","Frente"],["back","Costas"]] as const).map(([side,label])=>(
+                      <Button key={side} label={(view===side?"✓ ":"")+label} tone={view===side?"blue":"light"}
+                        onPress={()=>{setView(side);setIntimate(false);}}/>
                     ))}
+                  </View>
                 </View>
-              ))}
-            </ElderPages>
-</View>
+                <View style={{gap:8,flexDirection:intimate?"row":"column",alignItems:"center",flex:shortWide?1.25:undefined}}>
+                  <BodyMap view={view} selectedRegions={selectedRegions} onSelect={selectRegion}
+                    onIntimate={()=>setIntimate(value=>!value)} compactMap={intimate} disabled={busy}/>
+                  {intimate && <View style={{flex:1,minWidth:0,gap:8}}>
+                    <Text accessibilityRole="header" style={s.label}>Região íntima</Text>
+                    {view==="front" && !anatomy && <>
+                      <Button label="Masculina" tone="light" onPress={()=>setAnatomy("male")}/>
+                      <Button label="Feminina" tone="light" onPress={()=>setAnatomy("female")}/>
+                    </>}
+                    {(view==="back"?["anus"]:anatomy==="male"?["penis","scrotum","perineum"]:anatomy==="female"?["vulva","perineum"]:[])
+                      .map(key=><Button key={key} label={(selectedRegions.includes(key)?"✓ ":"")+regions[key]}
+                        tone={selectedRegions.includes(key)?"blue":"light"} onPress={()=>selectRegion(key)}/>)}
+                    {view==="front" && anatomy && <Button label="Alterar anatomia" tone="light" onPress={()=>setAnatomy(null)}/>}
+                  </View>}
+                </View>
+              </View>
 <View style={{gap:8}}>
             <Text style={s.subtitle}>Como é a dor?</Text>
             <View style={s.row}>
@@ -1209,11 +1188,10 @@ function Pains({ elder, user }: { elder: number; user: User }) {
               onBusyChange={setBusy}
               onCancel={() => setCreating(false)}
               onSave={async (v) => {
-                if (!location) throw new Error("Escolha o local da dor no mapa ou na lista antes de salvar.");
+                if (!locations.length) throw new Error("Marque pelo menos uma região no corpo antes de salvar.");
                 if (intensity===null) throw new Error("Escolha a intensidade da dor de 1 a 10 antes de salvar.");
                 const r = await api(path, "POST", {
-                  view:location.view,
-                  region:location.region,
+                  locations,
                   type,
                   intensity,
                   onset,
@@ -1268,6 +1246,9 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                 <Text style={s.subtitle}>
                   {p.intensity}/10 · {regions[p.region]}
                 </Text>
+                <View style={{flexDirection:"row",alignItems:"flex-start",gap:10}}>
+                {user.role==="caregiver" && <BodyMap view={p.view} selectedRegions={[p.region]}/>}
+                <View style={{flex:1,minWidth:0,gap:8}}>
                 <Text style={s.text}>
                   {p.type} · {p.view === "front" ? "Frente" : "Costas"}
                   {"\n"}Início: {p.onset}
@@ -1286,6 +1267,8 @@ function Pains({ elder, user }: { elder: number; user: User }) {
                     Ainda sem visualizações de cuidadores.
                   </Text>
                 )}
+                </View>
+                </View>
                 {user.role === "caregiver" &&
                   !p.views.some(
                     (v: any) => Number(v.caregiver_id) === Number(user.id),
@@ -1811,6 +1794,16 @@ export default function App() {
   const currentTab = useRef("Início");
   const caregiver = user?.role === "caregiver";
   const elderLayout = user?.role === "elder";
+  const [pinchZoom,setPinchZoom]=useState(false);
+  useEffect(()=>{
+    if (Platform.OS!=="web" || !window.visualViewport) return;
+    const viewport=window.visualViewport;
+    const update=()=>setPinchZoom(viewport.scale>1.05);
+    update();
+    viewport.addEventListener("resize",update);
+    return ()=>viewport.removeEventListener("resize",update);
+  },[]);
+  const compactOverflow=elderLayout && (pinchZoom || width<300 || height<340 || (width<560 && height<460));
   const demo = !!user && isBrowserDemo();
   useEffect(() => {
     if (desktop || !user) setDrawerOpen(false);
@@ -2026,12 +2019,12 @@ export default function App() {
         />
       );
   }
-  const Content = elderLayout ? View : ScrollView;
+  const Content = elderLayout && !compactOverflow ? View : ScrollView;
   return (
     <ElderLayout.Provider value={elderLayout}>
     <ElderViewport.Provider value={elderHeight}>
     <SafeAreaProvider>
-      <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FAFCFC",overflow:"hidden"}]}>
+      <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FAFCFC"}]}>
         <StatusBar style="dark" />
         <View aria-hidden={drawerOpen&&!desktop}
           importantForAccessibility={drawerOpen&&!desktop?"no-hide-descendants":"auto"}
@@ -2054,7 +2047,7 @@ export default function App() {
               </View>
             </View>
           )}
-          <Content {...(elderLayout ? {
+          <Content {...(elderLayout && !compactOverflow ? {
             testID:"elder-content",
             onLayout:({nativeEvent}:LayoutChangeEvent)=>setElderHeight(Math.round(nativeEvent.layout.height)),
             style:[s.content,{
@@ -2065,7 +2058,10 @@ export default function App() {
             }],
           } : {
             ref:scroll, keyboardShouldPersistTaps:"handled",
-            contentContainerStyle:[s.content, desktop && {padding:32,paddingTop:28,maxWidth:user?1120:1240}],
+            testID:elderLayout?"elder-content":undefined,
+            contentContainerStyle:[s.content, elderLayout
+              ? {maxWidth:550,paddingHorizontal:12,paddingVertical:10,gap:8}
+              : desktop && {padding:32,paddingTop:28,maxWidth:user?1120:1240}],
           })}>
             {!!sessionMessage && (
               <Text accessibilityRole="alert" style={s.error}>

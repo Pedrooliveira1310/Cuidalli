@@ -9,7 +9,6 @@ const paths:Record<string,string>={
  person:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a8 8 0 0 1 16 0v2',
  pills:'m8 4-5 5a6 6 0 0 0 8 8l5-5a6 6 0 0 0-8-8Zm-3 3 8 8',
  calendar:'M4 5h16v16H4ZM4 10h16M8 2v6m8-6v6M8 14h2m4 0h2m-8 3h2',
- pain:'M12 3v18M3 12h18M6 6l12 12M6 18 18 6',
  contacts:'M8 4H4v16h16v-4M12 4h8v8M20 4 10 14',
  link:'m9 15 6-6M7 14l-2 2a4 4 0 0 0 6 6l4-4a4 4 0 0 0 0-6M17 10l2-2a4 4 0 0 0-6-6L9 6a4 4 0 0 0 0 6',
  check:'m5 12 4 4L19 6',
@@ -25,7 +24,9 @@ const paths:Record<string,string>={
  up:'m5 15 7-7 7 7',
 };
 export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:number;color?:string}){
- if(name==='elder') return <Image accessible={false} source={require('../assets/prototype/elder.png')} style={{width:size,height:size,tintColor:color}} resizeMode="contain"/>;
+ if(name==='elder'||name==='pain') return <Image accessible={false}
+   source={name==='elder'?require('../assets/brand/icone-pessoa-idosa.png'):require('../assets/brand/icone-dor.png')}
+   style={{width:size,height:size,tintColor:color,flexShrink:0}} resizeMode="contain"/>;
  if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
  const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃'};
  return <Text style={{fontSize:size,color}}>{fallback[name]??'+'}</Text>;
