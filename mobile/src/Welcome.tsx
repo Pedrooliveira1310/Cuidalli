@@ -1,5 +1,6 @@
+import {Pressable, Text, View} from "./Appearance";
 import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet} from "react-native";
 import { AppIcon, BrandHeader } from "./Visual";
 import { colors, styles as shared } from "./ui";
 

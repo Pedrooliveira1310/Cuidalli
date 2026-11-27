@@ -1,15 +1,18 @@
+import {Text,appearanceColor,useAppearance} from "./Appearance";
 import React,{useState,useEffect} from 'react';
-import {Text,Platform,Linking} from 'react-native';
+import {Platform,Linking} from 'react-native';
 import {api,getServer,User} from './api';
 import {isBrowserDemo} from './demo';
 import {BackButton,Button,Form,colors,sexField,styles as s} from './ui';
 
 export function LegalLink({kind}:{kind:'terms'|'privacy'}) {
+ const appearance=useAppearance();
  const label=kind==='terms'?'Termos de Uso':'Política de Privacidade';
  const path=kind==='terms'?'/termos-de-uso.html':'/privacidade.html';
  const href=(getServer()||'https://cuidali-production.up.railway.app')+path;
  if(Platform.OS==='web') return <a href={href} target="_blank" rel="noopener noreferrer"
-   style={{color:colors.blue,fontSize:18,lineHeight:"24px",paddingBlock:10}}>{label}</a>;
+   style={{color:appearanceColor(colors.blue,"ink",appearance) as string,fontSize:Math.round(18*appearance.factor),
+     lineHeight:1.35,fontWeight:appearance.bold?700:400,paddingBlock:appearance.targets?15:10}}>{label}</a>;
  return <Text accessibilityRole="link" onPress={()=>{void Linking.openURL(href);}}
    style={{color:colors.blue,fontSize:18,lineHeight:24,textDecorationLine:'underline',paddingVertical:10}}>{label}</Text>;
 }

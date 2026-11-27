@@ -1,12 +1,20 @@
+import {View, Text, Pressable} from "./Appearance";
 import React from 'react';
-import {View,Text,Image,Pressable,Platform} from 'react-native';
+import {Image,Platform} from 'react-native';
 import {colors,styles as s} from './ui';
+import {appearanceColor,useAppearance} from './Appearance';
 
 const paths:Record<string,string>={
  home:'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',
  chat:'M21 11a8 8 0 0 1-8 8H7l-5 3 2-6a8 8 0 1 1 17-5Z',
  microphone:'M12 2a3 3 0 0 0-3 3v7a3 3 0 1 0 6 0V5a3 3 0 0 0-3-3ZM5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8',
  send:'m22 2-7 20-4-9-9-4 20-7ZM11 13 22 2',
+ speaker:'M3 9h4l5-4v14l-5-4H3Zm12 0a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12',
+ stop:'M6 6h12v12H6z',
+ accessibility:'M12 4h.01M4 8l8 2 8-2m-8 2v4m0 0-4 7m4-7 4 7M12 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z',
+ history:'M8 4H5v17h14V4h-3M9 2h6v5H9zm0 9h6m-6 4h6m-6 3h4',
+ search:'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 6 6',
+ clock:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 4v5l3 2',
  help:'M12 8v5m0 4h.01M10.3 3.8 2.4 18a2 2 0 0 0 1.8 3h15.6a2 2 0 0 0 1.8-3L13.7 3.8a2 2 0 0 0-3.4 0Z',
  person:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a8 8 0 0 1 16 0v2',
  pills:'m8 4-5 5a6 6 0 0 0 8 8l5-5a6 6 0 0 0-8-8Zm-3 3 8 8',
@@ -19,6 +27,7 @@ const paths:Record<string,string>={
  bell:'M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9m-8 12a2 2 0 0 0 4 0',
  grid:'M3 3h7v7H3Zm11 0h7v7h-7ZM3 14h7v7H3Zm11 0h7v7h-7Z',
  heart:'M20.8 4.8a5.5 5.5 0 0 0-7.8 0L12 5.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l8.9 8.9 8.8-8.9a5.5 5.5 0 0 0 0-7.8Z',
+ pain:'M20.8 4.8a5.5 5.5 0 0 0-7.8 0L12 5.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l8.9 8.9 8.8-8.9a5.5 5.5 0 0 0 0-7.8ZM3 12h5l2-3 2 6 2-3h7',
  menu:'M4 6h16M4 12h16M4 18h16',
  sidebar:'M3 4h18v16H3ZM9 4v16',
  close:'M6 6l12 12M18 6 6 18',
@@ -26,11 +35,13 @@ const paths:Record<string,string>={
  up:'m5 15 7-7 7 7',
 };
 export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:number;color?:string}){
- if(name==='elder'||name==='pain') return <Image accessible={false}
+ const a=useAppearance();
+ color=appearanceColor(color,"icon",a) as string;
+ if(name==='elder'||(name==='pain'&&Platform.OS!=="web")) return <Image accessible={false}
    source={name==='elder'?require('../assets/prototype/elder.png'):require('../assets/brand/icone-dor.png')}
    style={{width:size,height:size,tintColor:color,flexShrink:0}} resizeMode="contain"/>;
- if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
- const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃',microphone:'🎙',send:'➤'};
+ if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:a.contrast?2.5:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
+ const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃',microphone:'🎙',send:'➤',speaker:'◖))',stop:'■',accessibility:'A+',history:'≡',search:'⌕',clock:'◷'};
  return <Text style={{fontSize:size,color}}>{fallback[name]??'+'}</Text>;
 }
 export function BrandMark({size=48}:{size?:number}){
@@ -38,10 +49,10 @@ export function BrandMark({size=48}:{size?:number}){
   <Image source={require('../assets/brand/logo-mark.png')} accessibilityLabel="Logo Cuidali: cuidado entre gerações" style={{width:'100%',height:'100%'}} resizeMode="contain"/>
  </View>;
 }
-export function BrandHeader({onProfile,name,large=false,compact=false}:{onProfile?:()=>void;name?:string;large?:boolean;compact?:boolean}){
+export function BrandHeader({onProfile,name,large=false,compact=false,dark=false}:{onProfile?:()=>void;name?:string;large?:boolean;compact?:boolean;dark?:boolean}){
  return <View style={{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:large?14:8,marginBottom:large?8:0}}>
   <BrandMark size={large?72:compact?38:48}/>
-  <View style={{flex:1}}><Text style={{fontSize:large?32:24,fontWeight:'800',color:colors.dark,letterSpacing:-.8}}>Cuidali</Text>{!compact&&<Text style={{fontSize:15,color:'#4D6079',lineHeight:22}}>Cuidar é estar por perto.</Text>}</View>
+  <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{fontSize:large?32:compact?20:24,fontWeight:'800',color:dark?'#FFF':colors.dark,letterSpacing:-.8}}>Cuidali</Text>{!compact&&<Text style={{fontSize:15,color:'#4D6079',lineHeight:22}}>Cuidar é estar por perto.</Text>}</View>
   {onProfile&&<Pressable accessibilityRole="button" accessibilityLabel="Abrir meus dados" onPress={onProfile} style={{width:48,height:48,borderRadius:24,backgroundColor:'#DFEAF6',alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#C5D8ED'}}><Text style={{fontSize:20,fontWeight:'700',color:colors.blue}}>{(name||'C').slice(0,1).toUpperCase()}</Text></Pressable>}
  </View>;
 }
@@ -67,14 +78,13 @@ export function AuthBrandPanel(){
     </View>
   );
 }
-export function DayHero({name,date,summary,elderName,wide}:{
+export function DayHero({name,date,elderName,wide,onElder}:{
   name:string;
   date:string;
-  summary?:{taken:number;total:number};
   elderName?:string;
   wide:boolean;
+  onElder?:()=>void;
 }){
-  const progress = summary?.total ? Math.round(summary.taken * 100 / summary.total) : 0;
   return (
     <View style={{
       backgroundColor:'#123449', padding:wide?24:18, borderRadius:21, gap:16,
@@ -94,24 +104,17 @@ export function DayHero({name,date,summary,elderName,wide}:{
         <Text accessibilityRole="header" style={[s.title,{fontSize:wide?42:34,lineHeight:wide?50:42,color:'#FFF'}]}>
           Olá, {name}
         </Text>
-        {elderName && <Text style={[s.text,{color:'#D6E8FA'}]}>Acompanhando {elderName}</Text>}
+        {elderName && <Pressable accessibilityRole="button" accessibilityLabel={`Pessoa acompanhada: ${elderName}. Ver meus idosos`}
+          onPress={onElder} style={{flexDirection:"row",gap:10,alignItems:"center",padding:8,
+            minHeight:55,backgroundColor:"#244A64",borderRadius:13,borderWidth:1,borderColor:"#537892"}}>
+          <AppIcon name="elder" color="#D6E8FA" size={25}/>
+          <View style={{flex:1,minWidth:0}}>
+            <Text style={[s.muted,{color:"#D6E8FA"}]}>Pessoa acompanhada</Text>
+            <Text style={{fontSize:20,fontWeight:"800",color:"#FFF"}}>{elderName}</Text>
+          </View>
+          <AppIcon name="chevron" color="#D6E8FA" size={21}/>
+        </Pressable>}
       </View>
-      {summary && (
-        <View style={{width:wide?252:'100%',padding:13,borderRadius:14,backgroundColor:'#0B293C',gap:7}}>
-          <Text style={{color:'#FFF',fontSize:18,fontWeight:'700',lineHeight:24}}>Medicação de hoje</Text>
-          {!!summary.total && (
-            <View accessible accessibilityRole="progressbar" accessibilityLabel="Doses confirmadas"
-              aria-valuemin={0} aria-valuemax={summary.total} aria-valuenow={summary.taken}
-              accessibilityValue={{min:0,max:summary.total,now:summary.taken}}
-              style={{height:9,borderRadius:5,backgroundColor:'#3E6083',overflow:'hidden'}}>
-              <View style={{width:`${progress}%`,height:'100%',backgroundColor:'#7FE0CA'}}/>
-            </View>
-          )}
-          <Text style={[s.muted,{color:'#D6E8FA'}]}>
-            {summary.total ? `${summary.taken} de ${summary.total} doses confirmadas hoje` : 'Nenhuma dose programada'}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }

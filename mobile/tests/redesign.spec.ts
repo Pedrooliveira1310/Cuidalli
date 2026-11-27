@@ -2,6 +2,41 @@ import {advanceTo} from "./elder-steps";
 import {test,expect} from '@playwright/test';
 const base=process.env.E2E_API_URL||'http://127.0.0.1:8010';
 
+test('preferências de acessibilidade persistem e a leitura usa a tela atual',async({page})=>{
+ await page.setViewportSize({width:320,height:568});
+ await page.addInitScript(()=>{
+  const spoken:string[]=[];
+  Object.defineProperty(window,'cuidaliSpokenForTest',{value:spoken});
+  Object.defineProperty(window.speechSynthesis,'speak',{value:(value:SpeechSynthesisUtterance)=>spoken.push(value.text)});
+ });
+ await page.goto('/');
+ await page.getByRole('button',{name:'Pessoa idosa',exact:true}).click();
+ const hello=page.getByRole('heading',{name:'Olá, Maria',exact:true});
+ const regular=await hello.evaluate(node=>parseFloat(getComputedStyle(node).fontSize));
+ await page.getByRole('button',{name:'Acessibilidade',exact:true}).click();
+ await page.getByRole('radio',{name:'Muito grande',exact:true}).click();
+ await page.getByRole('radio',{name:'Automático',exact:true}).click();
+ await page.emulateMedia({colorScheme:'dark'});
+ await page.getByRole('switch',{name:'Alto contraste',exact:true}).click();
+ await page.getByRole('switch',{name:'Texto em negrito',exact:true}).click();
+ await page.getByRole('switch',{name:'Botões maiores',exact:true}).click();
+ const close=page.getByRole('button',{name:'Fechar acessibilidade',exact:true});
+ await close.click();
+ await expect(hello).toHaveCSS('color','rgb(255, 255, 255)');
+ expect(await hello.evaluate(node=>parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThan(regular);
+ await expect(page.getByRole('button',{name:'Registrar dor',exact:true})).toHaveCSS('min-height','54px');
+ await page.getByRole('button',{name:'Ler tela em voz alta',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Parar leitura',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>Reflect.get(window,'cuidaliSpokenForTest').join(' '))).toContain('Maria');
+ await page.getByRole('button',{name:'Parar leitura',exact:true}).click();
+ await page.reload();
+ await page.getByRole('button',{name:'Acessibilidade',exact:true}).click();
+ await expect(page.getByRole('radio',{name:'Muito grande',exact:true})).toBeChecked();
+ await expect(page.getByRole('radio',{name:'Automático',exact:true})).toBeChecked();
+ for(const name of ['Alto contraste','Texto em negrito','Botões maiores'])
+  await expect(page.getByRole('switch',{name,exact:true})).toBeChecked();
+});
+
 test('os dois botões abrem os perfis fictícios sem gravar no banco',async({page})=>{
  const writes:string[]=[];
  page.on('request',request=>{if(request.method()!=='GET') writes.push(request.url());});

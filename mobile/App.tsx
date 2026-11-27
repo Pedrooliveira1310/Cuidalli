@@ -1,3 +1,9 @@
+import {View, Text, Pressable, TextInput} from "./src/Appearance";
+import {AppearanceProvider,themedStyle,useAppearance,usePreferences} from "./src/Appearance";
+import {AccessibilityPanel,ReadScreenButton,UtilityButton} from "./src/AccessibilityPanel";
+import {CareIcon,FilterBar,Initials,Metric,ScreenHeading,Status,TimelineRow} from "./src/CarePanels";
+import {CareHistory,CareSchedule,WeekPicker,type Appointment,type Medicine} from "./src/CareRecords";
+import {todaySP} from "./src/validation";
 import { ElderLayout, ElderPages, ElderViewport } from "./src/ElderPages";
 import {AppIcon,BrandMark,AuthBrandPanel,BrandHeader,DayHero,MenuTile,MenuRow} from "./src/Visual";
 import {CareDrawer,CareSidebar,CareTabs,MenuToggle} from "./src/CareNavigation";
@@ -11,14 +17,10 @@ import {
   useWindowDimensions,
   Image,
   BackHandler,
-  View,
-  Text,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Pressable,
-  TextInput,
   Modal,
   type LayoutChangeEvent,
 } from "react-native";
@@ -445,7 +447,7 @@ function Home({
 }: {
   elder: number;
   user: User;
-  navigate: (tab: string) => void;
+  navigate: (tab: string, day?:string) => void;
   doseRevision: number;
 }) {
   const {width, height} = useWindowDimensions();
@@ -612,44 +614,56 @@ function Home({
       <DayHero
         name={user.name.split(" ")[0]}
         date={new Date().toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo",weekday:"long",day:"numeric",month:"long"})}
-        elderName={caregiver ? state.data?.elder.name : undefined}
-        summary={state.data ? {taken:state.data.doses.filter((d:any)=>d.status==='taken').length,total:state.data.doses.length} : undefined}
+        elderName={state.data?.elder.name}
+        onElder={()=>navigate("Vínculos")}
         wide={wide}
       />
-      <Loading state={state} refresh={false} />
-      {!!message && (
-        <Text accessibilityRole="alert" style={s.text}>
-          {message}
-        </Text>
-      )}
-      {state.data && (
-        <>
-          <View style={{flexDirection:wide?"row":"column",alignItems:"flex-start",gap:16}}>
-          <View style={{flex:wide?1.1:undefined,width:wide?undefined:"100%",minWidth:0,gap:12}}>
-            <View style={{gap:10}}>
-              <Text accessibilityRole="header" style={s.subtitle}>Acompanhamento de hoje</Text>
-              <View style={[s.row,{alignItems:"stretch"}]}>
-                <MenuTile label={pendingAlerts===1?"1 alerta aguardando":pendingAlerts+" alertas aguardando"}
-                  actionLabel="Ver alertas do cuidado" subtitle="Pedidos e respostas"
-                  icon="bell" warm={pendingAlerts>0} onPress={()=>navigate("Alertas")}/>
-                <MenuTile label={appointmentsToday===1?"1 consulta hoje":appointmentsToday+" consultas hoje"}
-                  actionLabel="Abrir agenda de cuidados" subtitle="Agenda da pessoa idosa"
-                  icon="calendar" onPress={()=>navigate("Consultas")}/>
+      <Loading state={state} refresh={false}/>
+      {!!message&&<Text accessibilityRole="alert" style={s.text}>{message}</Text>}
+      {state.data&&<>
+        <Text accessibilityRole="header" style={s.subtitle}>Acompanhamento de hoje</Text>
+        <View style={[s.row,{alignItems:"stretch"}]}>
+          <Metric label="Doses previstas" icon="pills" value={state.data.doses.length}
+            actionLabel="Ver todos os medicamentos" onPress={()=>navigate("Medicamentos")}/>
+          <Metric label="Alertas aguardando" icon="bell" value={pendingAlerts} tone={pendingAlerts?"amber":"blue"}
+            actionLabel="Ver alertas do cuidado" onPress={()=>navigate("Alertas")}/>
+          <Metric label="Consultas hoje" icon="calendar" value={appointmentsToday}
+            actionLabel="Abrir agenda de cuidados" onPress={()=>navigate("Agenda")}/>
+        </View>
+        <View style={{flexDirection:wide?"row":"column",alignItems:"flex-start",gap:14}}>
+          <View style={{flex:wide?1.4:undefined,width:wide?undefined:"100%",minWidth:0,gap:12}}>
+            <Card>
+              <View style={{flexDirection:"row",gap:9,alignItems:"center"}}>
+                <CareIcon icon="clock"/><Text accessibilityRole="header" style={s.subtitle}>Rotina de hoje</Text>
               </View>
-            </View>
+              {!state.data.doses.length&&!appointmentsToday&&<Text style={s.text}>Nenhuma dose ou consulta prevista para hoje.</Text>}
+              {[
+                ...state.data.doses.map((d:any)=>({key:"d"+d.time_id,title:d.name,detail:d.dosage,time:d.time,
+                  icon:"pills",status:d.status==="taken"?"Dose confirmada":d.status==="pending"?"Pendente":"Dose prevista",
+                  tone:d.status==="taken"?"green" as const:"blue" as const})),
+                ...state.data.appointments.map((a:Appointment)=>({key:"a"+a.id,title:a.specialty,detail:a.doctor+" · "+a.location,
+                  time:localInput(a.scheduled_at).slice(11,16),icon:"calendar",status:"Consulta",tone:"blue" as const})),
+              ].sort((a,b)=>a.time.localeCompare(b.time)).map(({key,...item})=><TimelineRow key={key} {...item}/>)}
+            </Card>
             <Alerts elder={elder} caregiver onUpdated={state.reload} onOpenAll={()=>navigate("Alertas")} />
+          </View>
+          <View style={{flex:wide?1:undefined,width:wide?undefined:"100%",minWidth:0,gap:12}}>
+            <WeekPicker selected={state.data.date} onChange={day=>navigate("Agenda",day)}/>
+            <Card>
+              <Text accessibilityRole="header" style={s.subtitle}>Ações rápidas</Text>
+              <View style={[s.row,{alignItems:"stretch"}]}>
+                <MenuTile label="Consultas" actionLabel="Ver próximas consultas" subtitle="Agende e acompanhe" icon="calendar" onPress={()=>navigate("Consultas")}/>
+                <MenuTile label="Registros de dores" subtitle="Veja os locais de dor" icon="pain" warm onPress={()=>navigate("Dores")}/>
+              </View>
+              <Button label="Ver histórico de cuidados" tone="light" onPress={()=>navigate("Histórico")}/>
+            </Card>
             <Card>
               <Text accessibilityRole="header" style={s.subtitle}>Atividade</Text>
               <Text style={s.muted}>{state.data.last_activity
                 ? `Último registro em ${dateTime(state.data.last_activity.created_at)}`
                 : "Ainda não há atividade registrada pela pessoa idosa."}</Text>
-              <Pressable accessibilityRole="button" accessibilityState={{expanded:activitySettingsOpen}}
-                onPress={()=>setActivitySettingsOpen(value=>!value)}
-                style={{alignSelf:"flex-start",minHeight:44,justifyContent:"center"}}>
-                <Text style={{fontSize:16,color:colors.blue,fontWeight:"700"}}>
-                  {activitySettingsOpen?"Fechar configurações de atividade":"Configurar aviso de inatividade"}
-                </Text>
-              </Pressable>
+              <Button label={activitySettingsOpen?"Fechar configurações de atividade":"Configurar aviso de inatividade"}
+                tone="light" onPress={()=>setActivitySettingsOpen(value=>!value)}/>
               {activitySettingsOpen && <Form
                 fields={[{key:"inactivity_hours",label:"Alertar após quantas horas sem atividade?",placeholder:"De 1 a 168"}]}
                 submit="Salvar acompanhamento" onSave={async v=>{
@@ -657,69 +671,12 @@ function Home({
                   setMessage("Acompanhamento atualizado.");
                   setActivitySettingsOpen(false);
                   state.reload();
-                }} />}
+                }}/>}
             </Card>
           </View>
-          <View style={{flex:wide?1:undefined,width:wide?undefined:"100%",minWidth:0,gap:12}}>
-          <Text accessibilityRole="header" style={s.subtitle}>Remédios de hoje</Text>
-          {!state.data.doses.length && (
-            <Card><Text style={s.text}>Nenhuma dose prevista para hoje.</Text></Card>
-          )}
-          {!!state.data.doses.length && <Card>{state.data.doses.map((d: any,index:number) => (
-              <View key={d.time_id} style={{flexDirection:"row",alignItems:"center",gap:12,
-                borderTopWidth:index?1:0,borderColor:"#DDE8EC",paddingTop:index?10:0}}>
-                <View style={{minWidth:56,minHeight:44,borderRadius:11,backgroundColor:colors.light,alignItems:"center",justifyContent:"center"}}>
-                  <Text style={{fontWeight:"800",fontSize:16,color:colors.blue}}>{d.time}</Text>
-                </View>
-                <View style={{flex:1,minWidth:0,gap:2}}>
-                  <Text style={s.label}>{d.name}</Text>
-                  <Text style={[s.muted,d.status==="taken"&&{color:colors.green}]}>{d.dosage} · {statusLabel[d.status]}</Text>
-                </View>
-              </View>
-          ))}</Card>}
-          <Text accessibilityRole="header" style={s.subtitle}>Consultas de hoje</Text>
-          {!state.data.appointments.length && (
-            <Card tone="yellow"><Text style={s.text}>Nenhuma consulta marcada para hoje.</Text></Card>
-          )}
-          {state.data.appointments.map((a: any) => (
-            <Card key={a.id} tone="yellow"><Image source={require("./assets/prototype/calendar.png")} style={{width:48,height:56}} resizeMode="contain" />
-              <Text style={s.subtitle}>
-                {a.doctor} · {a.specialty}
-              </Text>
-              <Text style={s.text}>
-                {dateTime(a.scheduled_at)}
-                {"\n"}
-                {a.location}
-              </Text>
-              <Button label="Adicionar à agenda" tone="light" onPress={()=>{
-                if (isBrowserDemo()) setMessage("Consulta de exemplo. A agenda do aparelho fica fora da demonstração.");
-                else calendar(a);
-              }} />
-            </Card>
-          ))}
-          </View>
-          </View>
-          <Text accessibilityRole="header" style={s.subtitle}>Acesso rápido</Text>
-          <View style={{flexDirection:'row',flexWrap:'wrap',gap:14}}>
-            <MenuTile label="Medicamentos" actionLabel="Ver todos os medicamentos" subtitle="Horários e doses" icon="pills" onPress={()=>navigate('Medicamentos')}/>
-            <MenuTile label="Consultas" actionLabel="Ver próximas consultas" subtitle="Agenda de atendimentos" icon="calendar" warm onPress={()=>navigate('Consultas')}/>
-            <MenuTile label="Registros de dores" subtitle={caregiver?"Acompanhe os registros":"Conte como você está se sentindo"} icon="pain" onPress={()=>navigate('Dores')}/>
-          </View>
-            <Card>
-              <Text accessibilityRole="header" style={s.subtitle}>Histórico de doses</Text>
-              {!state.data.dose_history.length && (
-                <Text style={s.text}>Nenhuma confirmação registrada.</Text>
-              )}
-              {state.data.dose_history.map((d: any,index:number) => (
-                <View key={d.id} style={{borderTopWidth:index?1:0,borderColor:"#DDE8EC",paddingTop:index?10:0,gap:2}}>
-                  <Text style={s.label}>{d.name} · {statusLabel[d.status]}</Text>
-                  <Text style={s.muted}>{calendarDate(d.dose_date)} às {d.time.slice(0,5)} · Registro em {dateTime(d.recorded_at)}</Text>
-                </View>
-              ))}
-            </Card>
-          <Button label="Atualizar dados" tone="light" onPress={state.reload} />
-        </>
-      )}
+        </View>
+        <Button label="Atualizar dados" tone="light" onPress={state.reload}/>
+      </>}
     </>
   );
 }
@@ -728,6 +685,51 @@ function CalendarScreen({elder,onOpenAppointments,onBack}:{elder:number;onOpenAp
   return <>
     <Loading state={state} refresh={!!state.error}/>
     {state.data && !state.denied && <ElderCalendar appointments={state.data.items} onOpenAppointments={onOpenAppointments} onBack={onBack}/>}
+  </>;
+}
+
+function CareAgendaScreen({elder,onOpenAppointments,initialDay}:{elder:number;onOpenAppointments:()=>void;initialDay:string}) {
+  const appointments=useData(`/elders/${elder}/appointments`);
+  const medications=useData(`/elders/${elder}/medications`);
+  return <>
+    <Loading state={appointments} refresh={!!appointments.error}/>
+    <Loading state={medications} refresh={!!medications.error}/>
+    {!appointments.denied&&!medications.denied&&appointments.data&&medications.data&&
+      <CareSchedule appointments={appointments.data.items} medications={medications.data.items} onAppointments={onOpenAppointments} initialDay={initialDay}/>}
+  </>;
+}
+
+function CareRoutineSummary({elder}:{elder:number}) {
+  const state=useData(`/elders/${elder}/dashboard`);
+  if(!state.data) return <Loading state={state} refresh={!!state.error}/>;
+  const doses:{time_id:number;name:string;dosage:string;time:string;status:string}[]=state.data.doses;
+  const confirmed=doses.filter(dose=>dose.status==="taken").length;
+  return <>
+    <View style={[s.row,{alignItems:"stretch"}]}>
+      <Metric label="Doses do dia" icon="pills" value={doses.length}/>
+      <Metric label="Doses confirmadas" icon="check" tone="green" value={confirmed}/>
+      <Metric label="A confirmar" icon="clock" tone="amber" value={doses.length-confirmed}/>
+    </View>
+    <Card>
+      <Text accessibilityRole="header" style={s.subtitle}>Cuidados de hoje</Text>
+      {!doses.length&&<Text style={s.muted}>Nenhuma dose prevista para hoje.</Text>}
+      {doses.map(dose=><TimelineRow key={dose.time_id} title={dose.name} detail={dose.dosage} time={dose.time}
+        status={dose.status==="taken"?"Confirmada":"A confirmar"} icon="pills" tone={dose.status==="taken"?"green":"blue"}/>)}
+    </Card>
+  </>;
+}
+
+const painRegionName=(region:string)=>regions[region]??region;
+function CareHistoryScreen({elder}:{elder:number}) {
+  const dashboard=useData(`/elders/${elder}/dashboard`);
+  const appointments=useData(`/elders/${elder}/appointments`);
+  const pains=useData(`/elders/${elder}/pains`);
+  return <>
+    <Loading state={dashboard} refresh={!!dashboard.error}/>
+    <Loading state={appointments} refresh={!!appointments.error}/>
+    <Loading state={pains} refresh={!!pains.error}/>
+    {dashboard.data&&appointments.data&&pains.data&&<CareHistory doses={dashboard.data.dose_history}
+      appointments={appointments.data.items} pains={pains.data.items} regionName={painRegionName}/>}
   </>;
 }
 
@@ -747,6 +749,16 @@ function Resources({
   const notify=useContext(ActionFeedback);
   const canWrite = true;
   const caregiver = user.role === "caregiver";
+  const [filter,setFilter]=useState<"all"|"upcoming"|"past"|"cancelled">("all");
+  const [search,setSearch]=useState("");
+  const cutoff=Date.now();
+  const appointmentStatus=(a:Appointment)=>Number(a.cancelled)?"cancelled":
+    Date.parse(a.scheduled_at.replace(" ","T")+"Z")<cutoff?"past":"upcoming";
+  const resources=state.data?.items??[];
+  const visible=kind==="appointments"&&caregiver
+    ? resources.filter((a:Appointment)=>(filter==="all"||filter===appointmentStatus(a))&&
+      (a.doctor+" "+a.specialty+" "+a.location).toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")))
+    : resources;
   const label = {
     medications: "Medicamentos",
     appointments: "Consultas",
@@ -783,7 +795,11 @@ function Resources({
             />);
   return (
     <>
-      {!editing && <View style={tight?s.row:{gap:8}}>
+      {!editing && caregiver && <ScreenHeading label={label}
+        icon={kind==="medications"?"pills":kind==="appointments"?"calendar":"contacts"}
+        description={kind==="medications"?"Prescrições, dosagens e horários.":kind==="appointments"?"Acompanhe os atendimentos registrados.":undefined}
+        action={!state.denied?addRecord:null}/>}
+      {!editing && !caregiver && <View style={tight?s.row:{gap:8}}>
         <Text accessibilityRole="header" style={tight?s.subtitle:s.title}>{label}</Text>
         {!state.denied && addRecord}
       </View>}
@@ -837,10 +853,27 @@ function Resources({
       ) : (
         <>
           <Loading state={state} refresh={caregiver} />
+          {caregiver&&kind==="appointments"&&state.data&&<>
+            <View style={[s.row,{alignItems:"stretch"}]}>
+              <Metric label="Próximas" icon="calendar" value={resources.filter((a:Appointment)=>appointmentStatus(a)==="upcoming").length}/>
+              <Metric label="Datas passadas" icon="clock" value={resources.filter((a:Appointment)=>appointmentStatus(a)==="past").length}/>
+              <Metric label="Canceladas" icon="close" tone="red" value={resources.filter((a:Appointment)=>appointmentStatus(a)==="cancelled").length}/>
+            </View>
+            <FilterBar label="Filtrar consultas"
+              items={[{value:"all",label:"Todas"},{value:"upcoming",label:"Próximas"},{value:"past",label:"Datas passadas"},{value:"cancelled",label:"Canceladas"}]}
+              selected={filter} onChange={setFilter}/>
+            <TextInput accessibilityLabel="Buscar consulta" placeholder="Buscar consulta" value={search} onChangeText={setSearch} style={s.input}/>
+          </>}
+          {caregiver&&kind==="medications"&&state.data&&<View style={[s.row,{alignItems:"stretch"}]}>
+            <Metric label="Medicamentos ativos" icon="pills" value={resources.filter((m:Medicine)=>Number(m.active)).length}/>
+            <Metric label="Doses previstas hoje" icon="clock" value={resources.filter((m:Medicine)=>Number(m.active)&&m.start_date<=todaySP()&&m.end_date>=todaySP())
+              .reduce((total:number,m:Medicine)=>total+m.times.length,0)}/>
+          </View>}
           {state.data?.items.length === 0 && (
             <Text style={s.text}>Nenhum registro cadastrado.</Text>
           )}
-          <ElderPages label="Registro">{state.data?.items.map((item: any) => (
+          {!!resources.length&&!visible.length&&<Text style={s.muted}>Nenhum registro encontrado.</Text>}
+          <ElderPages label="Registro">{visible.map((item: any) => (
             <Card
               key={item.id}
               tone={
@@ -853,7 +886,10 @@ function Resources({
             >
               <View style={tight?{flexDirection:"row",alignItems:"center",gap:12}:{gap:8}}>
               <View style={tight?{flex:1,minWidth:0,gap:6}:{gap:8}}>
-              <Text style={s.subtitle}>{item.name || item.doctor}</Text>
+              <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+                {caregiver&&<CareIcon icon={kind==="medications"?"pills":kind==="appointments"?"calendar":"contacts"}/>}
+                <Text style={[s.subtitle,{flexShrink:1}]}>{item.name || item.doctor}</Text>
+              </View>
               {kind === "medications" ? (
                 <>
                   <Text style={s.text}>
@@ -874,9 +910,13 @@ function Resources({
                     {dateTime(item.scheduled_at)}
                     {"\n"}
                     {item.location}
-                    {"\n"}
-                    {Number(item.cancelled) ? "Cancelada" : "Agendada"}
                   </Text>
+                  <Status label={Number(item.cancelled)?"Cancelada":appointmentStatus(item)==="past"?"Data passada":"Agendada"}
+                    tone={Number(item.cancelled)?"red":"blue"} icon={Number(item.cancelled)?"close":"calendar"}/>
+                  {caregiver&&appointmentStatus(item)==="upcoming"&&<Button label="Adicionar à agenda do aparelho" tone="light" onPress={()=>{
+                    if(isBrowserDemo()) notify("Consulta de exemplo. A agenda do aparelho fica fora da demonstração.");
+                    else calendar(item);
+                  }}/>}
                 </>
               ) : (
                 <>
@@ -1010,11 +1050,12 @@ function BodyMap({disabled = false, view, selectedRegions, onSelect, onIntimate,
 }) {
   const compact = useContext(ElderLayout);
   const room = useContext(ElderViewport);
+  const {targets}=useAppearance();
   const {width:windowWidth, height:windowHeight} = useWindowDimensions();
   const shortWide = windowHeight < 460 && windowWidth >= 560;
   const front = view === "front";
   const editable=!!onSelect;
-  const height = !editable ? 156 : compactMap ? 148 : compact
+  const height = !editable ? 156 : compactMap ? 148 : targets ? 360 : compact
     ? Math.max(130, Math.min(shortWide ? 250 : 395, (room || 500) - (shortWide ? 165 : windowHeight >= 640 ? 350 : 316)))
     : 430;
   const width = height * 0.62;
@@ -1035,7 +1076,7 @@ function BodyMap({disabled = false, view, selectedRegions, onSelect, onIntimate,
         accessibilityState={{selected:intimateSelected,disabled}} disabled={disabled} onPress={onIntimate}
         style={{position:"absolute",left:width/2-hitWidth*.4,top:height*.49-hitHeight/2,
           width:hitWidth*.8,height:hitHeight,zIndex:1,alignItems:"center",justifyContent:"center"}}>
-        <View pointerEvents="none" style={{width:14,height:14,borderRadius:7,borderColor:"#FFF",borderWidth:2,
+        <View pointerEvents="none" style={{width:14,height:14,borderRadius:intimateSelected?3:7,borderColor:"#FFF",borderWidth:2,
           backgroundColor:intimateSelected?colors.red:colors.blue}}/>
       </Pressable> : intimateSelected && <View pointerEvents="none"
         style={{position:"absolute",left:width/2-7,top:height*.49-7,width:14,height:14,borderRadius:7,
@@ -1141,7 +1182,9 @@ function Pains({ elder, user, onBack, onOpenProfile }: { elder: number; user: Us
     <FormBusy.Provider value={busy}>
       <>
         {user.role==="elder" && <BackButton label={returnToBody?"Voltar ao corpo":"Voltar"} onPress={backInPains}/>}
-        {!creating && <Text style={s.title}>Registro de dores</Text>}
+        {!creating && (user.role==="caregiver"
+          ? <ScreenHeading label="Sintomas e dores" description="Acompanhe os locais e a intensidade registrados." icon="pain"/>
+          : <Text style={s.title}>Registro de dores</Text>)}
         {user.role === "elder" && !creating && (
           <Button label="Registrar uma dor" onPress={startRecord} />
         )}{" "}
@@ -1290,9 +1333,12 @@ function Pains({ elder, user, onBack, onOpenProfile }: { elder: number; user: Us
             )}
             <ElderPages label="Registro">{state.data?.items.map((p: any) => (
               <Card key={p.id}>
-                <Text style={s.subtitle}>
-                  {p.intensity}/10 · {regions[p.region]}
-                </Text>
+                <View style={{flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:8}}>
+                  {user.role==="caregiver"&&<CareIcon icon="pain" tone={Number(p.intensity)>=7?"red":"blue"}/>}
+                  <Text style={[s.subtitle,{flexShrink:1}]}>{p.intensity}/10 · {regions[p.region]}</Text>
+                  {user.role==="caregiver"&&<Status label={Number(p.intensity)>=7?"Intensa":Number(p.intensity)>=4?"Moderada":"Leve"}
+                    tone={Number(p.intensity)>=7?"red":Number(p.intensity)>=4?"amber":"green"}/>}
+                </View>
                 <View style={{flexDirection:"row",alignItems:"flex-start",gap:10}}>
                 {user.role==="caregiver" && <BodyMap view={p.view} selectedRegions={[p.region]}/>}
                 <View style={{flex:1,minWidth:0,gap:8}}>
@@ -1371,7 +1417,10 @@ function Links({
     [busy, setBusy] = useState(false),
     [adding, setAdding] = useState(false);
   const caregiver=user.role==="caregiver";
+  const [personSearch,setPersonSearch]=useState("");
   const linkedPeople:{id:number|string;name:string}[]|undefined=state.data?.items;
+  const displayedPeople=caregiver?linkedPeople?.filter(person=>person.name.toLocaleLowerCase("pt-BR")
+    .includes(personSearch.trim().toLocaleLowerCase("pt-BR"))):linkedPeople;
   const showLinkForm=caregiver && (adding || linkedPeople?.length===0);
   async function generate() {
     if (busy) return;
@@ -1399,7 +1448,8 @@ function Links({
   }
   return (
     <>
-      <Text accessibilityRole="header" style={room>0&&room<420?s.subtitle:s.title}>Pessoas vinculadas</Text>
+      {caregiver?<ScreenHeading label="Meus idosos" description="Pessoas vinculadas ao seu perfil de cuidador." icon="elder"/>
+        :<Text accessibilityRole="header" style={room>0&&room<420?s.subtitle:s.title}>Pessoas vinculadas</Text>}
       {user.role==="caregiver" && state.data && <Text style={s.muted}>
         {state.data.items.length === 1 ? "1 pessoa vinculada" : state.data.items.length+" pessoas vinculadas"}
       </Text>}
@@ -1409,6 +1459,9 @@ function Links({
         </Text>
       )}
       <Loading state={state} refresh={user.role==="caregiver"} />
+      {caregiver&&!!linkedPeople?.length&&<TextInput accessibilityLabel="Buscar pessoa idosa por nome"
+        placeholder="Buscar pessoa idosa por nome" value={personSearch} onChangeText={setPersonSearch} style={s.input}/>}
+      {caregiver&&!!linkedPeople?.length&&!displayedPeople?.length&&<Text style={s.muted}>Nenhuma pessoa encontrada.</Text>}
       {state.data?.items.length === 0 && (
         <Text style={s.text}>Você ainda não possui vínculos.</Text>
       )}
@@ -1426,13 +1479,13 @@ function Links({
             <Button label="Gerar código por 10 minutos" busy={busy} onPress={generate} />
           </>}
         </Card>}
-        {linkedPeople?.map(person => (
+        {displayedPeople?.map(person => (
         <Card key={person.id} tone={caregiver && Number(person.id)===selectedElder?"blue":undefined}>
           <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
-            <AppIcon name={caregiver?"elder":"person"} color={colors.green}/>
+            {caregiver?<Initials name={person.name}/>:<AppIcon name="person" color={colors.green}/>}
             <View style={{flex:1,minWidth:0}}>
               <Text style={s.subtitle}>{person.name}</Text>
-              {caregiver && Number(person.id)===selectedElder && <Text style={[s.muted,{color:colors.green}]}>Em acompanhamento</Text>}
+              {caregiver && Number(person.id)===selectedElder && <Status label="Em acompanhamento" icon="check" tone="green"/>}
             </View>
           </View>
           {caregiver && (
@@ -1580,19 +1633,26 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated,onOpenAll}:{elder:n
   const state=useData(`/elders/${elder}/alerts`);
   const notify=useContext(ActionFeedback);
   const [filter,setFilter]=useState<AlertStatus|"all">("all");
+  const [category,setCategory]=useState<"all"|"pain"|"sos"|"inactivity">("all");
   const items: CareAlert[] = state.data?.items ?? [];
-  const filtered = filter==="all" ? items : items.filter(item=>item.status===filter);
+  const byCategory=category==="all"?items:items.filter(item=>item.kind===category);
+  const filtered = filter==="all" ? byCategory : byCategory.filter(item=>item.status===filter);
   const visible = onOpenAll ? filtered.filter(item=>item.status!=="resolved")
     .sort((a,b)=>Number(b.status==="open")-Number(a.status==="open") || Number(b.kind==="sos")-Number(a.kind==="sos"))
     .slice(0,3) : filtered;
   useEffect(()=>{const t=setInterval(state.reload,15000);return ()=>clearInterval(t);},[state.reload]);
   const names:Record<string,string>={sos:"Pedido de ajuda",inactivity:"Ausência de atividade",pain:"Novo registro de dor"};
   async function update(id:number,status:string){try {const r=await api(`/elders/${elder}/alerts/${id}`,"PATCH",{status});notify(r.message);state.reload();onUpdated?.();}catch(e){notify((e as Error).message,true);}}
-  return <><Text accessibilityRole="header" style={showFilters?s.title:s.subtitle}>Alertas e acompanhamento</Text>{!!state.error&&<Text style={s.error}>{state.error}</Text>}
+  return <>{showFilters?<ScreenHeading label="Notificações" icon="bell" description="Pedidos de ajuda, registros de dor e avisos de inatividade."/>
+    :<Text accessibilityRole="header" style={s.subtitle}>Alertas e acompanhamento</Text>}
+    {!!state.error&&<Text style={s.error}>{state.error}</Text>}
+    {showFilters&&state.data&&<FilterBar label="Tipo de notificação" selected={category} onChange={setCategory}
+      items={[{value:"all",label:"Todas"},{value:"sos",label:"Pedidos de ajuda"},
+        {value:"pain",label:"Dores"},{value:"inactivity",label:"Inatividade"}]}/>}
     {showFilters&&state.data&&(
       <View style={[s.row,{gap:8}]} accessibilityLabel="Filtrar alertas por status">
         {alertFilters.map(option=>{
-          const count=option.status==="all"?items.length:items.filter(item=>item.status===option.status).length;
+          const count=option.status==="all"?byCategory.length:byCategory.filter(item=>item.status===option.status).length;
           const selected=filter===option.status;
           return <Pressable key={option.status} accessibilityRole="button" aria-pressed={selected}
             onPress={()=>setFilter(option.status)}
@@ -1602,21 +1662,24 @@ function Alerts({elder,caregiver,showFilters=false,onUpdated,onOpenAll}:{elder:n
               backgroundColor:selected?"#225BA5":pressed||hovered?colors.light:"#FFF",
             })}>
             <Text style={{fontSize:16,lineHeight:22,fontWeight:"700",color:selected?"#FFF":colors.dark}}>
-              {option.label} ({count})
+              {selected?"✓ ":""}{option.label} ({count})
             </Text>
           </Pressable>;
         })}
       </View>
     )}
     {state.data&&!visible.length&&<Text style={s.muted}>{onOpenAll?"Nenhum alerta em aberto.":filter==="all"?"Nenhum alerta registrado.":"Nenhum alerta com esse status."}</Text>}
-    <ElderPages label="Pedido">{visible.map(a=><Card key={a.id} tone={a.status==="open"?(a.kind==="sos"?"danger":"yellow"):undefined}>
-      <Text style={s.subtitle}>{names[a.kind]}</Text>
+    <ElderPages label="Pedido">{visible.map(a=><Card key={a.id} testID="care-alert"
+      tone={a.status==="open"?(a.kind==="sos"?"danger":"yellow"):undefined}>
+      <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+        <CareIcon icon={a.kind==="sos"?"help":a.kind==="pain"?"pain":"clock"}
+          tone={a.status==="open"?(a.kind==="sos"?"red":"amber"):"blue"}/>
+        <Text style={[s.subtitle,{flexShrink:1}]}>{names[a.kind]}</Text>
+      </View>
       <View style={s.row}>
         <Text style={s.muted}>{dateTime(a.created_at)}</Text>
-        <Text style={[s.muted,{backgroundColor:a.status==='open'?'#F8E8C7':'#E2F2EB',
-          color:a.status==='open'?'#704A16':colors.green,fontWeight:'700',paddingHorizontal:10,paddingVertical:4,borderRadius:10}]}>
-          {a.status==='open'?'Aguardando cuidador':a.status==='accepted'?'Em acompanhamento':'Concluído'}
-        </Text>
+        <Status label={a.status==='open'?'Aguardando cuidador':a.status==='accepted'?'Em acompanhamento':'Concluído'}
+          icon={a.status==='resolved'?"check":"clock"} tone={a.status==='open'?"amber":"green"}/>
       </View>
       {!!a.accepted_name&&<Text style={s.text}>Acompanhado por {a.accepted_name}</Text>}
       {caregiver&&a.status!=='resolved'&&<View style={s.row}>
@@ -1639,9 +1702,9 @@ function ChatBubble({text,own=false,onListen,live=false}:{
 }) {
   return <View style={{alignSelf:own?"flex-end":"flex-start",maxWidth:"92%",minWidth:0,
     paddingHorizontal:13,paddingVertical:9,gap:3,borderWidth:1,borderColor:own?"#C7E4D8":"#D9E6EC",
-    backgroundColor:own?"#E4F3ED":"#FFF",borderRadius:16,borderTopLeftRadius:own?16:5,borderTopRightRadius:own?5:16}}>
-    <Text style={{fontSize:14,fontWeight:"800",color:own?colors.green:colors.blue}}>{own?"Você":"Cuidali"}</Text>
-    <Text style={s.text} accessibilityLiveRegion={live?"polite":undefined}>{text}</Text>
+    backgroundColor:own?"#123449":"#FFF",borderRadius:16,borderTopLeftRadius:own?16:5,borderTopRightRadius:own?5:16}}>
+    <Text style={{fontSize:14,fontWeight:"800",color:own?"#D6E8FA":colors.blue}}>{own?"Você":"Cuidali"}</Text>
+    <Text style={[s.text,own&&{color:"#FFF"}]} accessibilityLiveRegion={live?"polite":undefined}>{text}</Text>
     {onListen && <Pressable accessibilityRole="button" accessibilityLabel="Ouvir resposta" onPress={onListen}
       style={({pressed})=>({alignSelf:"flex-start",justifyContent:"center",minHeight:44,paddingHorizontal:7,
         borderRadius:9,backgroundColor:pressed?"#E3EEF9":"transparent"})}>
@@ -1654,6 +1717,7 @@ function Assistant({elder,caregiver,navigate,onClose,onDoseRecorded,recentQuesti
   elder:number;caregiver:boolean;navigate:(tab:string)=>void;onClose:()=>void;onDoseRecorded:()=>void;
   recentQuestions:React.RefObject<string[]>;
 }) {
+  const appearance=useAppearance();
   const path=`/elders/${elder}/assistant`;
   const state=useData(path);
   const [draft,setDraft]=useState("");
@@ -1734,12 +1798,11 @@ function Assistant({elder,caregiver,navigate,onClose,onDoseRecorded,recentQuesti
 
   return <View style={{flex:1,minHeight:0,width:"100%",maxWidth:760,alignSelf:"center",
     borderRadius:17,borderWidth:1,borderColor:"#D5E4E9",backgroundColor:"#FFF",overflow:"hidden"}}>
-    <View style={{flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:12,paddingVertical:6,
-      borderBottomWidth:1,borderColor:"#DCE8ED"}}>
-      <View style={{width:34,height:34,borderRadius:11,alignItems:"center",justifyContent:"center",backgroundColor:"#E3F2ED"}}>
-        <AppIcon name="chat" color={colors.green} size={21}/>
-      </View>
-      <Text accessibilityRole="header" style={[s.subtitle,{flex:1}]}>Seu assistente</Text>
+    <View style={{flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:10,paddingVertical:7,
+      borderBottomWidth:1,borderColor:"#315C78",backgroundColor:"#123449"}}>
+      <BrandMark size={36}/>
+      <Text accessibilityRole="header" style={[s.subtitle,{flex:1,color:"#FFF",fontSize:20}]}>Seu assistente</Text>
+      <ReadScreenButton screenId="cuidali-chat-leitura" onUnavailable={message=>setFeedback({message,error:true})}/>
       <Pressable accessibilityRole="button" accessibilityLabel="Fechar assistente" onPress={onClose}
         style={({pressed})=>({width:44,height:44,borderRadius:12,backgroundColor:pressed?"#D6E8E2":"#EAF4F1",
           alignItems:"center",justifyContent:"center"})}>
@@ -1747,7 +1810,8 @@ function Assistant({elder,caregiver,navigate,onClose,onDoseRecorded,recentQuesti
       </Pressable>
     </View>
     {state.denied ? <View style={{padding:12}}><Loading state={state}/></View> : <>
-      <ScrollView ref={transcript} testID="assistant-transcript" style={{flex:1,minHeight:0,backgroundColor:"#F3F8FA"}}
+      <ScrollView nativeID="cuidali-chat-leitura" ref={transcript} testID="assistant-transcript"
+        style={themedStyle({flex:1,minHeight:0,backgroundColor:"#F3F8FA"},appearance,"view") as any}
         contentContainerStyle={{paddingHorizontal:12,paddingTop:12,paddingBottom:10,gap:12}}
         keyboardShouldPersistTaps="handled" scrollEventThrottle={32}
         onScroll={({nativeEvent})=>{
@@ -1757,6 +1821,10 @@ function Assistant({elder,caregiver,navigate,onClose,onDoseRecorded,recentQuesti
         {!turns.length && !pending && !state.loading && !state.error && <>
           <ChatBubble text="Olá! Posso conversar, responder perguntas ou ajudar com seus cuidados. Como posso ajudar?"/>
           <Text style={s.muted}>{caregiver?"Esta conversa é visível para a pessoa idosa e os cuidadores vinculados.":"Seus cuidadores vinculados também podem ler esta conversa."}</Text>
+          <View style={s.row}>
+            <Button label="Medicamentos de hoje" tone="light" onPress={()=>void ask("Quais são os medicamentos de hoje?")}/>
+            <Button label="Próximas consultas" tone="light" onPress={()=>void ask("Quais são as próximas consultas?")}/>
+          </View>
         </>}
         {!turns.length && <Loading state={state} refresh={!!state.error}/>}
         {turns.map(turn=><View key={turn.id} style={{gap:6}}>
@@ -1928,7 +1996,15 @@ function ServerSetup({ onDone, onCancel }: { onDone: () => void; onCancel?: () =
   </Card>;
 }
 export default function App() {
+  const {appearance,setPreferences}=usePreferences();
+  return <AppearanceProvider value={appearance}><Cuidali onPreferencesChange={setPreferences}/></AppearanceProvider>;
+}
+
+function Cuidali({onPreferencesChange}:{onPreferencesChange:React.ComponentProps<typeof AccessibilityPanel>["onChange"]}) {
   const {width,height} = useWindowDimensions();
+  const appearance=useAppearance();
+  const [accessibilityOpen,setAccessibilityOpen]=useState(false);
+  const closeAccessibility=useCallback(()=>setAccessibilityOpen(false),[]);
   const desktop = Platform.OS === "web" && width >= 980;
   const [elderHeight, setElderHeight] = useState(0);
   const shortWide = height < 460 && width >= 560;
@@ -1950,6 +2026,7 @@ export default function App() {
     catch { return false; }
   });
   const [doseRevision, setDoseRevision] = useState(0);
+  const [agendaDay,setAgendaDay]=useState(todaySP);
   const [user, setUser] = useState<User | null>(null),
     [starting, setStarting] = useState(true),
     [tab, setTabState] = useState("Início"),
@@ -1979,7 +2056,8 @@ export default function App() {
     try { window.localStorage.setItem("cuidali.menu.recolhido",railCollapsed?"1":"0"); }
     catch { /* The layout still works without browser storage. */ }
   }, [desktop,railCollapsed]);
-  function setTab(next:string) {
+  function setTab(next:string,day?:string) {
+    if(next==="Agenda") setAgendaDay(day??todaySP());
     if (next==="Assistente" && elder) {
       setAssistantOpen(true);
       return;
@@ -2148,10 +2226,12 @@ export default function App() {
     else if (tab === "Cuidados")
       screen = (
         <>
-          <Text accessibilityRole="header" style={s.title}>{caregiver?"Cuidados da pessoa acompanhada":"Seu espaço de cuidado"}</Text>
-          <Text style={s.subtitle}>{caregiver?"Rotina de cuidado":"Sua rotina"}</Text>
+          <ScreenHeading label={caregiver?"Cuidados":"Seu espaço de cuidado"}
+            description={caregiver?"Acompanhe a rotina da pessoa selecionada.":undefined} icon="elder"/>
+          {!!elder&&<CareRoutineSummary elder={elder}/>}
           <View style={{flexDirection:'row',flexWrap:'wrap',gap:14}}><MenuTile label="Medicamentos" subtitle="Doses e horários" icon="pills" onPress={()=>setTab('Medicamentos')}/><MenuTile label="Consultas" subtitle="Agenda e próximos encontros" icon="calendar" warm onPress={()=>setTab('Consultas')}/></View>
           <MenuRow label="Dores" subtitle={caregiver?"Acompanhe como a pessoa idosa está se sentindo":"Registre e acompanhe como está se sentindo"} icon="pain" onPress={()=>setTab('Dores')}/>
+          <MenuRow label="Histórico de cuidados" subtitle="Registros, consultas passadas e doses" icon="history" onPress={()=>setTab("Histórico")}/>
           <MenuRow label="Contatos" subtitle="Pessoas de confiança para uma ligação" icon="contacts" onPress={()=>setTab('Contatos')}/>
           <MenuRow label="Vínculos" subtitle={caregiver?"Pessoas que você acompanha":"Quem compartilha o cuidado com você"} icon="link" onPress={()=>setTab('Vínculos')}/>
           <Text style={[s.subtitle,{marginTop:12}]}>Sua conta</Text>
@@ -2184,6 +2264,10 @@ export default function App() {
       screen = <Alerts key={elder} elder={elder} caregiver showFilters />;
     else if (tab === "Dores")
       screen = <Pains key={elder} elder={elder} user={user} onBack={goBack} onOpenProfile={()=>setTab("Meus dados")} />;
+    else if (tab === "Agenda" && caregiver)
+      screen = <CareAgendaScreen key={`${elder}:${agendaDay}`} elder={elder} initialDay={agendaDay} onOpenAppointments={()=>setTab("Consultas")} />;
+    else if (tab === "Histórico" && caregiver)
+      screen = <CareHistoryScreen key={elder} elder={elder}/>;
     else if (tab === "Calendário" && elderLayout)
       screen = <CalendarScreen key={elder} elder={elder} onOpenAppointments={()=>setTab("Consultas")} onBack={goBack} />;
     else
@@ -2202,17 +2286,23 @@ export default function App() {
         />
       );
   }
-  const fixedContent=elderLayout && !compactOverflow;
+  const fixedContent=elderLayout && !compactOverflow && appearance.size==="normal" && !appearance.targets;
   const Content = fixedContent ? View : ScrollView;
+  const readingId="cuidali-conteudo-atual";
+  const landscapeTools=elderLayout&&shortWide;
+  const tools=<View style={{flexDirection:landscapeTools?"column":"row",alignItems:"center",gap:appearance.targets?12:6}}>
+    <ReadScreenButton key={tab} screenId={readingId} onUnavailable={message=>notify(message,true)} showLabel={desktop&&!elderLayout}/>
+    <UtilityButton icon="accessibility" label="Acessibilidade" onPress={()=>setAccessibilityOpen(true)} showLabel={desktop&&!elderLayout}/>
+  </View>;
   return (
     <ElderLayout.Provider value={elderLayout}>
     <ElderViewport.Provider value={elderHeight}>
     <ActionFeedback.Provider value={notify}>
     <SafeAreaProvider>
-      <SafeAreaView style={[s.page, elderLayout && {backgroundColor:"#FAFCFC"}]}>
-        <StatusBar style="dark" />
-        <View aria-hidden={(drawerOpen&&!desktop)||assistantOpen}
-          importantForAccessibility={(drawerOpen&&!desktop)||assistantOpen?"no-hide-descendants":"auto"}
+      <SafeAreaView style={themedStyle([s.page, elderLayout ? {backgroundColor:"#FAFCFC"} : {backgroundColor:"#EDF4FA"}],appearance,"view") as any}>
+        <StatusBar style={appearance.dark?"light":"dark"} />
+        <View aria-hidden={(drawerOpen&&!desktop)||assistantOpen||accessibilityOpen}
+          importantForAccessibility={(drawerOpen&&!desktop)||assistantOpen||accessibilityOpen?"no-hide-descendants":"auto"}
           style={{flex:1,flexDirection:desktop&&!elderLayout?"row":"column"}}>
         {user && desktop && !elderLayout && (
           <CareSidebar name={user.name} caregiver={caregiver} screen={tab} onNavigate={setTab}
@@ -2223,20 +2313,26 @@ export default function App() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           {user && !desktop && !elderLayout && (
-            <View style={{flexDirection:"row",alignItems:"center",gap:10,paddingHorizontal:16,
-              borderBottomWidth:1,borderColor:"#DAE4F0",backgroundColor:"#FFF"}}>
-              <MenuToggle label="Abrir menu" icon="menu" expanded={drawerOpen} controls="cuidali-mobile-menu"
+            <View style={{flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:9,
+              borderBottomWidth:1,borderColor:"#315C78",backgroundColor:"#123449",borderBottomLeftRadius:16,borderBottomRightRadius:16}}>
+              <MenuToggle dark label="Abrir menu" icon="menu" expanded={drawerOpen} controls="cuidali-mobile-menu"
                 onPress={()=>setDrawerOpen(true)}/>
               <View style={{flex:1,minWidth:0}}>
-                <BrandHeader name={user.name} compact onProfile={()=>setTab("Meus dados")}/>
+                <BrandHeader name={user.name} compact dark onProfile={()=>setTab("Meus dados")}/>
               </View>
+              {tools}
             </View>
           )}
-          <Content {...(fixedContent ? {
+          {(!user||elderLayout||desktop)&&<View style={landscapeTools?{position:"absolute",right:8,top:8,zIndex:2}:
+            {width:"100%",maxWidth:elderLayout?550:1390,alignSelf:"center",
+              paddingTop:4,paddingBottom:2,paddingHorizontal:elderLayout?16:25,alignItems:"flex-end"}}>
+            {tools}
+          </View>}
+          <Content nativeID={readingId} {...(fixedContent ? {
             testID:elderLayout?"elder-content":undefined,
             onLayout:elderLayout?({nativeEvent}:LayoutChangeEvent)=>setElderHeight(Math.round(nativeEvent.layout.height)):undefined,
             style:[s.content,{
-              flex:1,minHeight:0,overflow:"hidden",maxWidth:shortWide ? 740 : 550,
+              flex:1,minHeight:0,overflow:"hidden",maxWidth:shortWide ? Math.min(740,width-116) : 550,
               paddingHorizontal:width >= 380 ? 22 : 16,
               paddingVertical:height < 640 ? 8 : 20,
               gap:height < 640 ? 6 : 12,
@@ -2245,8 +2341,8 @@ export default function App() {
             ref:scroll, keyboardShouldPersistTaps:"handled",
             testID:elderLayout?"elder-content":undefined,
             contentContainerStyle:[s.content, elderLayout
-              ? {maxWidth:550,paddingHorizontal:12,paddingVertical:10,gap:8}
-              : desktop && {padding:32,paddingTop:28,maxWidth:user?1120:1240}],
+              ? {maxWidth:landscapeTools?Math.min(740,width-116):550,paddingHorizontal:12,paddingVertical:10,gap:8}
+              : desktop && {padding:28,paddingTop:12,paddingBottom:user?82:28,maxWidth:user?1390:1240}],
           })}>
             {!!sessionMessage && (
               <Text accessibilityRole="alert" style={s.error}>
@@ -2277,7 +2373,7 @@ export default function App() {
                     </Pressable>
                   </View>
                 )}
-                {caregiver && tab !== "Vínculos" && (
+                {caregiver && tab !== "Vínculos" && tab !== "Início" && (
                   <View style={{alignSelf:desktop?"flex-end":"stretch"}}>
                     <CareSubject elder={elder} onOpen={()=>setTab("Vínculos")}/>
                   </View>
@@ -2306,7 +2402,7 @@ export default function App() {
           <AppIcon name="chat" size={23} color="#FFF"/>
           <Text style={{color:"#FFF",fontWeight:"800",fontSize:16}}>Assistente</Text>
         </Pressable>}
-        {feedback && !!user && <View pointerEvents="box-none" style={{position:"absolute",top:8,left:12,right:12,alignItems:"center"}}>
+        {feedback && <View pointerEvents="box-none" style={{position:"absolute",top:8,left:12,right:12,alignItems:"center"}}>
           <View style={{width:"100%",maxWidth:520}}>
             <FeedbackNotice feedback={feedback} onDismiss={()=>setFeedback(null)}/>
           </View>
@@ -2332,6 +2428,7 @@ export default function App() {
             </SafeAreaView>
           </KeyboardAvoidingView>
         </Modal>}
+        <AccessibilityPanel visible={accessibilityOpen} onClose={closeAccessibility} onChange={onPreferencesChange}/>
       </SafeAreaView>
     </SafeAreaProvider>
     </ActionFeedback.Provider>

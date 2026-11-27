@@ -1,5 +1,6 @@
+import {Pressable, Text, View} from "./Appearance";
 import React, {useContext, useState} from "react";
-import {Pressable, StyleSheet, Text, View, useWindowDimensions} from "react-native";
+import { StyleSheet, useWindowDimensions} from "react-native";
 import {ElderPages, ElderViewport} from "./ElderPages";
 import {BackButton, colors, localInput, styles as s} from "./ui";
 import {todaySP} from "./validation";
@@ -24,7 +25,7 @@ export function ElderCalendar({appointments, onOpenAppointments, onBack}:{
   const room=useContext(ElderViewport);
   const {width,height}=useWindowDimensions();
   const split=width>=560&&height<460;
-  const cellHeight=split ? (height<380?28:33) : room>0&&room<530 ? 34 : 40;
+  const cellHeight=split ? (room>0&&room<295?28:33) : room>0&&room<475 ? 30 : room>0&&room<530 ? 34 : 40;
   const byDate=new Map<string, Appointment[]>();
   for(const appointment of appointments) {
     if(Number(appointment.cancelled)) continue;
@@ -64,7 +65,7 @@ export function ElderCalendar({appointments, onOpenAppointments, onBack}:{
             accessibilityLabel={dayFormat.format(calendarDay(key))+(events ? `, ${events} ${events===1?"consulta":"consultas"}`:"")}
             onPress={()=>setSelected(key)} style={({pressed})=>[styles.day,{height:cellHeight},
               key===today&&styles.today,pressed&&{backgroundColor:colors.light},active&&styles.selected]}>
-            <Text style={[styles.number,active&&{color:"#FFF"}]}>{day}</Text>
+            <Text style={[styles.number,active&&{color:"#FFF",textDecorationLine:"underline"}]}>{day}</Text>
             {!!events&&<View style={[styles.dot,active&&{backgroundColor:"#FFF"}]}/>}
           </Pressable>;
         })}

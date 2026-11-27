@@ -1,5 +1,6 @@
+import {Pressable, Text, View} from "./Appearance";
 import React, { useEffect, useId, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, ScrollView, StyleSheet} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppIcon, BrandMark } from "./Visual";
 import { colors } from "./ui";
@@ -21,6 +22,7 @@ const routine: Entry[] = [
   { screen: "Medicamentos", label: "Medicamentos", icon: "pills" },
   { screen: "Consultas", label: "Consultas", icon: "calendar" },
   { screen: "Dores", label: "Dores", icon: "pain" },
+  { screen: "Histórico", label: "Histórico de cuidados", icon: "history" },
   { screen: "Contatos", label: "Contatos", icon: "contacts" },
 ];
 const account: Entry[] = [
@@ -35,6 +37,7 @@ const accent = "#8CE1D1";
 function primary(caregiver: boolean): Entry[] {
   return [
     { screen: "Início", label: "Início", icon: "home" },
+    ...(caregiver ? [{screen:"Agenda",label:"Agenda",icon:"calendar"}] : []),
     { screen: "Assistente", label: "Assistente", icon: "chat" },
     caregiver ? { screen: "Alertas", label: "Alertas", icon: "bell" } : { screen: "SOS", label: "SOS", icon: "help" },
     { screen: "Cuidados", label: caregiver ? "Cuidados" : "Idoso", icon: "elder" },
@@ -139,6 +142,8 @@ export function CareSidebar({name,caregiver,screen,onNavigate,collapsed=false,dr
           {primary(caregiver).map(item=><SidebarItem key={item.screen} item={item}
             selected={isSelected(item,screen)} collapsed={collapsed} onPress={()=>onNavigate(item.screen)}/>)}
         </View>
+        {caregiver&&!collapsed&&<SidebarItem item={{screen:"Vínculos",label:"Meus idosos",icon:"elder"}}
+          selected={screen==="Vínculos"} collapsed={false} shortcut onPress={()=>onNavigate("Vínculos")}/>}
         {!collapsed && <>
           <ShortcutGroup title="Rotina de cuidados" items={routine} screen={screen} onNavigate={onNavigate}
             expanded={routineOpen} onToggle={()=>setRoutineOpen(value=>!value)}/>
@@ -211,8 +216,8 @@ export function CareTabs({caregiver,screen,onNavigate}:NavigationProps) {
 const styles=StyleSheet.create({
   toggle:{width:48,height:48,borderRadius:13,alignItems:"center",justifyContent:"center",flexShrink:0},
   sidebar:{backgroundColor:navy,padding:12,gap:14,minHeight:0},
-  sidebarWide:{width:248},
-  sidebarCompact:{width:74},
+  sidebarWide:{width:248,margin:10,borderRadius:21},
+  sidebarCompact:{width:74,margin:8,borderRadius:18},
   drawer:{flex:1},
   drawerArea:{width:"86%",maxWidth:340,backgroundColor:navy},
   sideHeader:{flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
@@ -237,6 +242,7 @@ const styles=StyleSheet.create({
   profileRole:{color:pale,fontSize:13},
   overlay:{flex:1,flexDirection:"row"},
   backdrop:{position:"absolute",top:0,right:0,bottom:0,left:0,backgroundColor:"#071B33A8"},
-  dock:{flexDirection:"row",gap:4,padding:5,backgroundColor:"#FFF",borderTopWidth:1,borderColor:"#D7E3E8"},
+  dock:{flexDirection:"row",gap:4,padding:5,backgroundColor:"#FFF",borderTopWidth:1,borderColor:"#CCDDEA",
+    borderTopLeftRadius:17,borderTopRightRadius:17},
   dockItem:{flex:1,minWidth:0,minHeight:56,alignItems:"center",justifyContent:"center",gap:4,paddingHorizontal:2,borderRadius:14},
 });

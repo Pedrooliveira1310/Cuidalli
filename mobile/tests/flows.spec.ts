@@ -253,7 +253,7 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   await caregiver.getByRole('button',{name:'Enviar',exact:true}).click();
   await expect(caregiver.getByRole('button',{name:'Abrir SOS',exact:true})).toHaveCount(0);
   await caregiver.getByRole('button',{name:'Abrir Alertas',exact:true}).click();
-  const sosCard=caregiver.getByText('Pedido de ajuda',{exact:true}).locator('..');
+  const sosCard=caregiver.getByTestId('care-alert').filter({hasText:'Pedido de ajuda'});
   await sosCard.getByRole('button',{name:'Vou acompanhar',exact:true}).click();
   await expect(sosCard.getByText(/Em acompanhamento/)).toBeVisible();
   await page.getByRole('button',{name:'Meus pedidos de ajuda',exact:true}).click();

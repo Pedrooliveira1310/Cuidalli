@@ -1,5 +1,6 @@
+import {Pressable, Text, View} from "./Appearance";
 import {createContext} from "react";
-import {Pressable, StyleSheet, Text, View} from "react-native";
+import { StyleSheet} from "react-native";
 import {AppIcon} from "./Visual";
 
 export type Feedback = {message:string; error:boolean};

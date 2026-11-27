@@ -1,3 +1,5 @@
+import {Text, TextInput, Pressable, View} from "./Appearance";
+import {appearanceColor,useAppearance} from "./Appearance";
 import {ElderLayout, ElderPages, ElderViewport} from "./ElderPages";
 import React, {
   useState,
@@ -8,10 +10,6 @@ import React, {
 } from "react";
 import {
   StyleSheet,
-  Text,
-  TextInput,
-  Pressable,
-  View,
   Switch,
   Alert,
   Platform,
@@ -209,6 +207,7 @@ export function Form({
   onBusyChange?: (busy: boolean) => void;
 }) {
   const elder = useContext(ElderLayout);
+  const appearance = useAppearance();
   const room = useContext(ElderViewport);
   const shortForm = elder && room > 0 && room < 420;
   const [jump, setJump] = useState<{index:number}>();
@@ -393,13 +392,14 @@ export function Form({
       ref: (node: HTMLInputElement | HTMLTextAreaElement | null) => registerInput(key,node),
       style: {
         minHeight: 56,
-        border: `${errors[f.key] ? 2 : 1}px solid ${errors[f.key] ? colors.red : "#7B8490"}`,
+        border: `${errors[f.key]||appearance.contrast ? 2 : 1}px solid ${appearanceColor(errors[f.key] ? colors.red : "#7B8490","border",appearance)}`,
         borderRadius: 12,
         padding: 14,
         ...(f.secure && {paddingRight:60}),
-        fontSize: 18,
-        color: "#1A2635",
-        backgroundColor: "white",
+        fontSize: Math.round(18*appearance.factor),
+        fontWeight:appearance.bold?700:400,
+        color: appearanceColor("#1A2635","ink",appearance) as string,
+        backgroundColor: appearanceColor("white","surface",appearance) as string,
         width: "100%",
         boxSizing: "border-box" as const,
       },
@@ -594,10 +594,12 @@ export function Card({
   children,
   tone,
   flat = false,
+  testID,
 }: {
   children: React.ReactNode;
   tone?: "blue" | "yellow" | "danger";
   flat?: boolean;
+  testID?:string;
 }) {
   const room = useContext(ElderViewport);
   const compact = useContext(ElderLayout) && room > 0 && room < 540;
@@ -607,7 +609,7 @@ export function Card({
     danger: {backgroundColor:"#FFF3F2",borderColor:"#E9C4C4"},
   };
   return (
-    <View
+    <View testID={testID}
       style={[
         flat ? {gap:8} : styles.card,
         !flat && compact && {padding:12,gap:8},
