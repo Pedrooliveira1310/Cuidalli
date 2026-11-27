@@ -37,7 +37,7 @@ export function AccountProfile({user,onSaved}:{user:User;onSaved:(user:User)=>vo
  {initial&&<Form initial={initial} fields={[
  {key:'name',label:'Nome completo'},{key:'birth_date',label:'Nascimento',placeholder:'DD/MM/AAAA'},
  ...(user.role==='elder'?[{...sexField,optional:true}]:[]),
- {key:'phone',label:'Telefone com DDD',phone:true},{key:'email',label:'E-mail para recuperação'},
+ {key:'phone',label:'Telefone com DDD',phone:true},{key:'email',label:'E-mail para recuperação',optional:!initial.email},
  {key:'current_password',label:'Senha atual para alterar telefone ou e-mail',secure:true,optional:true}
  ]} submit="Salvar meus dados" onSave={async v=>{const r=await api('/me','PATCH',v);setInitial(r.user);onSaved(r.user);setMessage(r.message);}}/>}</>;
 }
