@@ -25,7 +25,7 @@ const paths:Record<string,string>={
 };
 export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:number;color?:string}){
  if(name==='elder'||name==='pain') return <Image accessible={false}
-   source={name==='elder'?require('../assets/brand/icone-pessoa-idosa.png'):require('../assets/brand/icone-dor.png')}
+   source={name==='elder'?require('../assets/prototype/elder.png'):require('../assets/brand/icone-dor.png')}
    style={{width:size,height:size,tintColor:color,flexShrink:0}} resizeMode="contain"/>;
  if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
  const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃'};
