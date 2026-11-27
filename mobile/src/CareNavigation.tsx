@@ -37,7 +37,7 @@ function primary(caregiver: boolean): Entry[] {
     { screen: "Início", label: "Início", icon: "home" },
     { screen: "Assistente", label: "Assistente", icon: "chat" },
     caregiver ? { screen: "Alertas", label: "Alertas", icon: "bell" } : { screen: "SOS", label: "SOS", icon: "help" },
-    { screen: "Cuidados", label: caregiver ? "Cuidados" : "Idoso", icon: caregiver ? "grid" : "elder" },
+    { screen: "Cuidados", label: caregiver ? "Cuidados" : "Idoso", icon: "elder" },
   ];
 }
 function isSelected(item: Entry, screen: string) {
