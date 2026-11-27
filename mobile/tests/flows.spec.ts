@@ -30,6 +30,9 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   for (const [label, value] of Object.entries(elderFields))
     await page.getByLabel(label, { exact: true }).fill(value);
   await page.getByRole("button", { name: "Criar conta", exact: true }).click();
+  await expect(page.getByText("Selecione uma opção.",{exact:true})).toBeVisible();
+  await page.getByRole("radio",{name:"Masculino",exact:true}).click();
+  await page.getByRole("button", { name: "Criar conta", exact: true }).click();
   await expect(
     page.getByText("Conta criada. Entre com telefone ou e-mail e senha."),
   ).toBeVisible();
@@ -43,6 +46,13 @@ test("cadastro, vínculo e cuidados com API e banco reais", async ({
   expect(login.ok()).toBeTruthy();
   const elderLogin = await login.json(),
     elder = elderLogin.user.id;
+  expect(elderLogin.user.sex).toBe("male");
+  await page.getByRole("button",{name:"Registrar dor",exact:true}).click();
+  await page.getByRole("button",{name:"Registrar uma dor",exact:true}).click();
+  await page.getByTestId("pain-body-map").getByRole("button",{name:"Região íntima",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Pênis",exact:true})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Vulva",exact:true})).toHaveCount(0);
+  await page.getByRole("tab",{name:"Início",exact:true}).click();
   const register = await request.post(base + "/auth/register", {
     data: {
       role: "caregiver",

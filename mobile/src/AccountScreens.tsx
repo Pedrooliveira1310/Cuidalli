@@ -2,7 +2,7 @@ import React,{useState,useEffect} from 'react';
 import {Text,Platform,Linking} from 'react-native';
 import {api,getServer,User} from './api';
 import {isBrowserDemo} from './demo';
-import {BackButton,Button,Form,colors,styles as s} from './ui';
+import {BackButton,Button,Form,colors,sexField,styles as s} from './ui';
 
 export function LegalLink({kind}:{kind:'terms'|'privacy'}) {
  const label=kind==='terms'?'Termos de Uso':'Política de Privacidade';
@@ -36,9 +36,10 @@ export function AccountProfile({user,onSaved}:{user:User;onSaved:(user:User)=>vo
  {Platform.OS==='web'&&!!window.CuidaliNative?.biometric&&<><Button label="Ativar entrada com biometria" tone="light" onPress={()=>window.CuidaliNative?.biometric?.(true)}/><Button label="Desativar entrada com biometria" tone="light" onPress={()=>{window.CuidaliNative?.disableBiometric?.();setMessage('Biometria desativada.');}}/></>}
  {initial&&<Form initial={initial} fields={[
  {key:'name',label:'Nome completo'},{key:'birth_date',label:'Nascimento',placeholder:'DD/MM/AAAA'},
+ ...(user.role==='elder'?[{...sexField,optional:true}]:[]),
  {key:'phone',label:'Telefone com DDD',phone:true},{key:'email',label:'E-mail para recuperação'},
  {key:'current_password',label:'Senha atual para alterar telefone ou e-mail',secure:true,optional:true}
- ]} submit="Salvar meus dados" onSave={async v=>{const r=await api('/me','PATCH',v);onSaved(r.user);setMessage(r.message);}}/>}</>;
+ ]} submit="Salvar meus dados" onSave={async v=>{const r=await api('/me','PATCH',v);setInitial(r.user);onSaved(r.user);setMessage(r.message);}}/>}</>;
 }
 export function PasswordRecovery({onBack}:{onBack:()=>void}){
  const [email,setEmail]=useState(''),[sent,setSent]=useState(false),[done,setDone]=useState(false),[message,setMessage]=useState('');

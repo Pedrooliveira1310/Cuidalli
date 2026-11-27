@@ -167,6 +167,11 @@ export type Field = {
   numeric?: boolean;
   optional?: boolean;
   toggle?: boolean;
+  choices?: readonly {value:string; label:string}[];
+};
+export const sexField:Field={
+  key:"sex",label:"Sexo",
+  choices:[{value:"male",label:"Masculino"},{value:"female",label:"Feminino"}],
 };
 function kindOf(f: Field) {
   return f.key === "scheduled_at"
@@ -254,12 +259,13 @@ export function Form({
     for (const f of fields) {
       const raw = String(values[f.key] ?? "").trim();
       if (!f.optional && !f.toggle && !raw) {
-        issues[f.key] = "Preencha este campo.";
+        issues[f.key] = f.choices ? "Selecione uma opção." : "Preencha este campo.";
         missing = true;
         continue;
       }
       if (f.optional && !raw) continue;
       if (f.toggle) continue;
+      if (f.choices && !f.choices.some(choice=>choice.value===raw)) issues[f.key]="Selecione uma opção válida.";
       if (f.key === "email" && raw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) issues.email="Informe um e-mail válido.";
       if (f.phone && !/^[0-9]{10,15}$/.test(raw.replace(/[\s()+. -]/g, "")))
         issues[f.key] = "Informe telefone com DDD (10 a 15 dígitos).";
@@ -452,7 +458,21 @@ export function Form({
               {f.key === "times" ? "Horários" : f.label}
               {f.optional ? " (opcional)" : ""}
             </Text>
-            {f.toggle ? (
+            {f.choices ? (
+              <View accessibilityRole="radiogroup" accessibilityLabel={f.label} style={styles.row}>
+                {f.choices.map((choice,index)=>{
+                  const checked=values[f.key]===choice.value;
+                  return <Pressable key={choice.value}
+                    ref={index===0 ? element=>registerInput(f.key,element) : undefined}
+                    accessibilityRole="radio" accessibilityLabel={choice.label}
+                    accessibilityState={{checked,disabled:busy}} disabled={busy} onPress={()=>change(f.key,choice.value)}
+                    style={({pressed})=>[styles.button,{minHeight:46,borderWidth:1,
+                      borderColor:checked?colors.blue:"#C6D9ED",backgroundColor:checked?colors.blue:pressed?"#D8E8FA":colors.light}]}>
+                    <Text style={[styles.buttonText,{color:checked?"#FFF":colors.dark}]}>{checked?"✓ ":""}{choice.label}</Text>
+                  </Pressable>;
+                })}
+              </View>
+            ) : f.toggle ? (
               <Switch
                 accessibilityLabel={f.label}
                 disabled={busy}

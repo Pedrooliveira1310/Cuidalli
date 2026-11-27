@@ -7,6 +7,7 @@ export type User = {
   name: string;
   phone: string;
   role: "elder" | "caregiver";
+  sex?: "male" | "female" | null;
 };
 export class ApiError extends Error {
   constructor(

@@ -11,7 +11,7 @@ final class Api {
     }
     private function fail(int $status,string $message): never { throw new ApiError($status,$message); }
     private function label(string $key): string {
-        return ['name'=>'nome','phone'=>'telefone','password'=>'senha','current_password'=>'senha atual','email'=>'e-mail','birth_date'=>'nascimento','role'=>'perfil','relationship'=>'parentesco','code'=>'código de vinculação','dosage'=>'dosagem','start_date'=>'início do uso','end_date'=>'fim do uso','doctor'=>'médico(a)','specialty'=>'especialidade','location'=>'local','scheduled_at'=>'data e hora da consulta','date'=>'data','status'=>'situação','view'=>'vista do corpo','region'=>'região do corpo','type'=>'tipo de dor','onset'=>'início da dor'][$key] ?? 'campo';
+        return ['name'=>'nome','phone'=>'telefone','password'=>'senha','current_password'=>'senha atual','email'=>'e-mail','birth_date'=>'nascimento','role'=>'perfil','sex'=>'sexo','relationship'=>'parentesco','code'=>'código de vinculação','dosage'=>'dosagem','start_date'=>'início do uso','end_date'=>'fim do uso','doctor'=>'médico(a)','specialty'=>'especialidade','location'=>'local','scheduled_at'=>'data e hora da consulta','date'=>'data','status'=>'situação','view'=>'vista do corpo','region'=>'região do corpo','type'=>'tipo de dor','onset'=>'início da dor'][$key] ?? 'campo';
     }
     private function length(string $value): int {
         $count=preg_match_all('/./us',$value);
@@ -81,7 +81,7 @@ final class Api {
         if ($method==='POST' && in_array($path,['/auth/forgot-password','/auth/reset-password'],true)) { $this->rate('recovery:ip:'.$ip,12); $this->rate('recovery:email:'.strtolower(trim(is_string($data['email']??null)?$data['email']:'')),8); return (new PasswordRecovery($this->db))->handle($path,$data); }
         if (!preg_match('/^Bearer ([a-f0-9]{64})$/',$authorization,$m)) $this->fail(401,'Entre novamente para continuar.');
         $hash=hash('sha256',$m[1]);
-        $this->user=$this->query('SELECT u.id,u.role,u.name,u.birth_date,u.phone,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP()',[$hash])->fetch() ?: [];
+        $this->user=$this->query('SELECT u.id,u.role,u.name,u.birth_date,u.phone,u.email,u.sex FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP()',[$hash])->fetch() ?: [];
         if (!$this->user) $this->fail(401,'Sessão expirada. Entre novamente.');
         if ($method==='POST' && $path==='/me/password') return $this->changePassword($data,$hash);
         if ($method==='PATCH' && $path==='/me') return $this->editProfile($data);
@@ -144,15 +144,16 @@ final class Api {
     }
     private function editProfile(array $data):array {
         $name=$this->text($data,'name');$birth=$this->date($data,'birth_date');$phone=$this->phone($data);$email=$this->email($data);
+        $sex=$this->user['role']==='elder' && isset($data['sex']) ? $this->enum($data,'sex',['male','female']) : null;
         $q=$this->query('SELECT * FROM users WHERE id=?',[$this->user['id']]);$old=$q->fetch();
         $this->validateBirthDate($birth,$birth===$old['birth_date']?'':$this->user['role']);
         if($phone!==$old['phone']||$email!==$old['email']){
             $password=$this->text($data,'current_password',72);
             if(!password_verify($password,$old['password_hash']))$this->fail(403,'Confira sua senha atual para alterar telefone ou e-mail.');
         }
-        try{$this->query('UPDATE users SET name=?,birth_date=?,phone=?,email=? WHERE id=?',[$name,$birth,$phone,$email,$this->user['id']]);}
+        try{$this->query('UPDATE users SET name=?,birth_date=?,phone=?,email=?,sex=COALESCE(?,sex) WHERE id=?',[$name,$birth,$phone,$email,$sex,$this->user['id']]);}
         catch(PDOException $e){if(($e->errorInfo[1]??0)===1062)$this->fail(409,'Este telefone ou e-mail já está em uso.');throw $e;}
-        return ['message'=>'Seus dados foram atualizados.','user'=>$this->query('SELECT id,role,name,birth_date,phone,email FROM users WHERE id=?',[$this->user['id']])->fetch()];
+        return ['message'=>'Seus dados foram atualizados.','user'=>$this->query('SELECT id,role,name,birth_date,phone,email,sex FROM users WHERE id=?',[$this->user['id']])->fetch()];
     }
     private function changePassword(array $data,string $sessionHash): array {
         $this->rate('change-password:'.$this->user['id'],8);
@@ -178,14 +179,15 @@ final class Api {
         $this->validateBirthDate($birth,$role);
         $phone=$this->phone($data); $password=PasswordPolicy::validate($data['password']??null);
         $email=$this->email($data);
+        $sex=$role==='elder' && array_key_exists('sex',$data) ? $this->enum($data,'sex',['male','female']) : null;
         $contact=null;
         if ($role==='elder') {
             if (!isset($data['emergency_contact']) || !is_array($data['emergency_contact'])) $this->fail(422,'Informe o contato de emergência.');
             $c=$data['emergency_contact']; $contact=[$this->text($c,'name'),$this->phone($c),$this->text($c,'relationship',60)];
         }
         try {
-            return $this->transaction(function () use($role,$name,$birth,$phone,$password,$contact,$email) {
-                $this->query('INSERT INTO users(role,name,birth_date,phone,password_hash,email) VALUES(?,?,?,?,?,?)',[$role,$name,$birth,$phone,password_hash($password,PASSWORD_DEFAULT),$email]);
+            return $this->transaction(function () use($role,$name,$birth,$phone,$password,$contact,$email,$sex) {
+                $this->query('INSERT INTO users(role,name,birth_date,phone,password_hash,email,sex) VALUES(?,?,?,?,?,?,?)',[$role,$name,$birth,$phone,password_hash($password,PASSWORD_DEFAULT),$email,$sex]);
                 $id=(int)$this->db->lastInsertId();
                 if ($contact) $this->query('INSERT INTO contacts(elder_id,name,phone,relationship,is_primary) VALUES(?,?,?,?,1)',[$id,...$contact]);
                 http_response_code(201); return ['id'=>$id,'message'=>'Conta criada. Entre com telefone ou e-mail e senha.'];
@@ -323,6 +325,9 @@ final class Api {
             $region=$this->enum($location,'region',['head','chest','abdomen','upper_back','lower_back','left_shoulder','right_shoulder','left_arm','right_arm','left_hand','right_hand','left_hip','right_hip','left_leg','right_leg','left_knee','right_knee','left_foot','right_foot','penis','scrotum','vulva','perineum','anus']);
             if ((in_array($region,['penis','scrotum','vulva','perineum'],true) && $view!=='front') || ($region==='anus' && $view!=='back'))
                 $this->fail(422,'Selecione a vista correspondente à região.');
+            if (($this->user['sex']==='male' && $region==='vulva')
+                || ($this->user['sex']==='female' && in_array($region,['penis','scrotum'],true)))
+                $this->fail(422,'Essa região não corresponde ao sexo informado em Meus dados.');
             $points[$view.':'.$region]=[$view,$region];
         }
         $type=$this->enum($data,'type',['Pontada','Queimação','Latejante','Aperto / peso','Formigamento','Constante']);

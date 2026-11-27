@@ -1,13 +1,15 @@
 import {advanceTo} from "./elder-steps";
 import { test, expect, Page, Route } from "@playwright/test";
+import type {User} from "../src/api";
 const base = process.env.E2E_API_URL || "http://127.0.0.1:8000";
-const elder = {
+const elder:User = {
   id: 1,
   name: "Pessoa protegida",
   phone: "11900000001",
   role: "elder",
+  sex: "female",
 };
-const caregiver = {
+const caregiver:User = {
   id: 2,
   name: "Cuidador fictício",
   phone: "11900000002",
@@ -348,7 +350,8 @@ test("mapa conserva o ponto marcado ao girar, com observação multilinha e larg
   await expect(page.getByTestId("pain-body-map").getByRole("button",{name:"Abdômen",exact:true})).toHaveAttribute("aria-pressed","true");
   await expect(page.getByText("2 regiões marcadas", {exact:true})).toBeVisible();
   await page.getByTestId("pain-body-map").getByRole("button",{name:"Região íntima",exact:true}).click();
-  await page.getByRole("button",{name:"Feminina",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Feminina",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Pênis",exact:true})).toHaveCount(0);
   await page.getByRole("button",{name:"Vulva",exact:true}).click();
   await expect(page.getByText("3 regiões marcadas",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Desmarcar Vulva",exact:true}).click();

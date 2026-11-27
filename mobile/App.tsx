@@ -45,6 +45,7 @@ import {
   Card,
   Form,
   Field,
+  sexField,
   styles as s,
   colors,
   confirmAction,
@@ -331,8 +332,8 @@ function Auth({onLogin,onScreenChange,wide}:{
           <Form
             key={"register" + role}
             fields={[
-              ...profileFields.map(field=>field.key==="birth_date" && role==="elder"
-                ? {...field,birthMinAge:60} : field),
+              ...profileFields.flatMap(field=>field.key==="birth_date" && role==="elder"
+                ? [{...field,birthMinAge:60},sexField] : [field]),
               ...(role === "elder"
                 ? [
                     {
@@ -362,6 +363,7 @@ function Auth({onLogin,onScreenChange,wide}:{
                 password: v.password,
                 ...(role === "elder"
                   ? {
+                      sex: v.sex,
                       emergency_contact: {
                         name: v.contact_name,
                         phone: v.contact_phone,
@@ -1070,10 +1072,9 @@ function BodyMap({disabled = false, view, selectedRegions, onSelect, onIntimate,
   );
 }
 
-function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>void }) {
+function Pains({ elder, user, onBack, onOpenProfile }: { elder: number; user: User; onBack:()=>void;onOpenProfile:()=>void }) {
   const notify=useContext(ActionFeedback);
   const [intimate, setIntimate] = useState(false);
-  const [anatomy, setAnatomy] = useState<"male"|"female"|null>(null);
   const [step,setStep]=useState(0);
   const [stepJump,setStepJump]=useState<{index:number}>();
   const {width, height} = useWindowDimensions();
@@ -1089,6 +1090,8 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
     [busy, setBusy] = useState(false);
   const selectedRegions=locations.filter(location=>location.view===view).map(location=>location.region);
   const hasIntimateSelection=selectedRegions.some(region=>intimateRegions.includes(region));
+  const intimateOptions=view==="back"?["anus"]:user.sex==="male"?["penis","scrotum","perineum"]
+    :user.sex==="female"?["vulva","perineum"]:[];
   function selectRegion(region:string) {
     setLocations(current=>current.some(location=>location.view===view && location.region===region)
       ? current.filter(location=>location.view!==view || location.region!==region)
@@ -1105,7 +1108,6 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
     setIntensity(null);
     setOnset("Hoje");
     setIntimate(false);
-    setAnatomy(null);
     setStep(0);
     setStepJump(undefined);
     setCreating(true);
@@ -1169,14 +1171,12 @@ function Pains({ elder, user, onBack }: { elder: number; user: User; onBack:()=>
                     onIntimate={()=>setIntimate(value=>!value)} compactMap={intimate} disabled={busy}/>
                   {intimate && <View style={{flex:1,minWidth:0,gap:8}}>
                     <Text accessibilityRole="header" style={s.label}>Região íntima</Text>
-                    {view==="front" && !anatomy && <>
-                      <Button label="Masculina" tone="light" onPress={()=>setAnatomy("male")}/>
-                      <Button label="Feminina" tone="light" onPress={()=>setAnatomy("female")}/>
+                    {!intimateOptions.length && <>
+                      <Text style={s.muted}>Preencha o campo Sexo em Meus dados para ver as opções.</Text>
+                      <Button label="Abrir Meus dados" tone="light" onPress={onOpenProfile}/>
                     </>}
-                    {(view==="back"?["anus"]:anatomy==="male"?["penis","scrotum","perineum"]:anatomy==="female"?["vulva","perineum"]:[])
-                      .map(key=><Button key={key} label={(selectedRegions.includes(key)?"Desmarcar ":"")+regions[key]}
+                    {intimateOptions.map(key=><Button key={key} label={(selectedRegions.includes(key)?"Desmarcar ":"")+regions[key]}
                         tone={selectedRegions.includes(key)?"blue":"light"} onPress={()=>selectRegion(key)}/>)}
-                    {view==="front" && anatomy && <Button label="Alterar anatomia" tone="light" onPress={()=>setAnatomy(null)}/>}
                   </View>}
                 </View>
               </View>
@@ -2183,7 +2183,7 @@ export default function App() {
     else if (tab === "Alertas" && caregiver)
       screen = <Alerts key={elder} elder={elder} caregiver showFilters />;
     else if (tab === "Dores")
-      screen = <Pains key={elder} elder={elder} user={user} onBack={goBack} />;
+      screen = <Pains key={elder} elder={elder} user={user} onBack={goBack} onOpenProfile={()=>setTab("Meus dados")} />;
     else if (tab === "Calendário" && elderLayout)
       screen = <CalendarScreen key={elder} elder={elder} onOpenAppointments={()=>setTab("Consultas")} onBack={goBack} />;
     else

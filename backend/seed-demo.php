@@ -20,12 +20,16 @@ try {
 
     foreach (DEMO_PROFILES as $email=>$profile) {
         $findProfile->execute([$email,$profile['phone'],$profile['role']]);
-        if (!$findProfile->fetchColumn()) {
+        $existingId=$findProfile->fetchColumn();
+        if (!$existingId) {
             $data=$profile+['email'=>$email,'password'=>$password,'birth_date'=>'1960-05-01'];
             if ($profile['role'] === 'elder') {
+                $data['sex']='female';
                 $data['emergency_contact']=['name'=>'Ana Silva','phone'=>'0000000002','relationship'=>'Filha'];
             }
             $request('POST','/auth/register',$data);
+        } elseif ($profile['role']==='elder') {
+            $db->prepare("UPDATE users SET sex='female' WHERE id=? AND sex IS NULL")->execute([$existingId]);
         }
         $accounts[$profile['role']]=$request('POST','/auth/login',['phone'=>$profile['phone'],'password'=>$password]);
     }

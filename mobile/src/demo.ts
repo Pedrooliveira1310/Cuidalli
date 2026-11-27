@@ -43,7 +43,7 @@ type DemoState = {
 };
 
 const profiles: Record<Role, DemoUser> = {
-  elder: {id:-101,role:"elder",name:"Maria Almeida",email:"maria.cuidali@example.com",phone:"0000000001",birth_date:"1960-05-01"},
+  elder: {id:-101,role:"elder",name:"Maria Almeida",email:"maria.cuidali@example.com",phone:"0000000001",birth_date:"1960-05-01",sex:"female"},
   caregiver: {id:-102,role:"caregiver",name:"Ana Silva",email:"ana.cuidali@example.com",phone:"0000000002",birth_date:"1988-04-17"},
 };
 const storageKey = "cuidali.demo.v1";
@@ -80,7 +80,10 @@ function load(): DemoState | undefined {
     if (value) {
       const parsed: DemoState = JSON.parse(value);
       if (parsed.users?.elder?.id === profiles.elder.id &&
-          (parsed.role === null || parsed.role === "elder" || parsed.role === "caregiver")) current = parsed;
+          (parsed.role === null || parsed.role === "elder" || parsed.role === "caregiver")) {
+        parsed.users.elder.sex ??= profiles.elder.sex;
+        current = parsed;
+      }
     }
   } catch {
     // Opening a demo still works when the browser blocks storage.
@@ -247,9 +250,13 @@ function dispatch(state: DemoState,role: Role,path: string,method: string,data: 
   if (path==="/me" && method==="GET") return {user};
   if (path==="/me" && method==="PATCH") {
     // Keep the demo identity fixed and never retain credentials or contact details entered here.
+    const sex=data.sex;
+    if (role==="elder" && sex!=null && sex!=="male" && sex!=="female")
+      throw new DemoRequestError(422,"Selecione uma opção válida para sexo.");
     const updated = {...user,name:value(data,"name") || user.name};
+    if (role==="elder" && (sex==="male"||sex==="female")) updated.sex=sex;
     state.users[role] = updated;
-    return {user:updated,message:"Nome atualizado na demonstração."};
+    return {user:updated,message:updated.sex!==user.sex?"Sexo atualizado na demonstração.":"Nome atualizado na demonstração."};
   }
   if (path==="/notifications" && method==="GET") {
     if (role==="caregiver") return {role,items:[]};

@@ -56,8 +56,15 @@ $result=callApi('POST',"/elders/$elder/pains",$pain+['locations'=>[$abdominal,$b
 ok(count($result['ids'])===2,'Uma seleção grava duas regiões e elimina duplicatas');
 $saved=callApi('GET',"/elders/$elder/pains",[],$et)['items'];
 ok(array_column($saved,'region')===['lower_back','abdomen'],'Mapa mantém as vistas e regiões selecionadas');
+ok(callApi('GET','/me',[],$et)['user']['sex']===null,'Conta antiga permanece sem sexo presumido');
+$profile=['name'=>'Idoso teste','birth_date'=>'1960-01-01','phone'=>$phone,'email'=>$email];
+callApi('PATCH','/me',$profile+['sex'=>'inválido'],$et,422);
+ok(callApi('PATCH','/me',$profile+['sex'=>'female'],$et)['user']['sex']==='female','Conta existente pode salvar o sexo em Meus dados');
+callApi('POST',"/elders/$elder/pains",$pain+['view'=>'front','region'=>'penis'],$et,422);
+ok(isset(callApi('POST',"/elders/$elder/pains",$pain+['view'=>'front','region'=>'vulva'],$et)['id']),'Região correspondente pode ser registrada');
 callApi('PATCH','/me',['name'=>'Nome editado','birth_date'=>'1960-01-01','phone'=>$phone,'email'=>$email],$et);
 ok(callApi('GET','/me',[],$et)['user']['name']==='Nome editado','Nome editado persiste');
+ok(callApi('GET','/me',[],$et)['user']['sex']==='female','Atendimento por versão antiga preserva o sexo cadastrado');
 callApi('PATCH','/me',['name'=>'Nome editado','birth_date'=>'1960-01-01','phone'=>$phone,'email'=>'novo'.$email,'current_password'=>'incorreta'],$et,403);
 $med=callApi('POST',"/elders/$elder/medications",['name'=>'Medicação prescrita','dosage'=>'1 comprimido','start_date'=>date('Y-m-d'),'end_date'=>date('Y-m-d',strtotime('+7 days')),'times'=>['08:00']],$et);
 ok(isset($med['id']),'Idoso cadastra medicamento próprio');
