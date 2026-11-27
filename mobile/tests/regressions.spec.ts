@@ -413,6 +413,16 @@ test("SOS bloqueia outro envio enquanto aguarda a resposta", async ({page}) => {
   const overflow=await page.getByTestId("elder-content").evaluate(el=>el.scrollHeight-el.clientHeight);
   expect(overflow).toBeLessThanOrEqual(2);
 });
+test("cuidador pode abrir os alertas no celular sem suporte a notificações", async ({page}) => {
+  await page.addInitScript(()=>Object.defineProperty(window,"Notification",{value:undefined,configurable:true}));
+  await setup(page,caregiver);
+  await page.getByRole("button",{name:"Acompanhar esta pessoa",exact:true}).first().click();
+  await page.getByRole("tab",{name:"Cuidados",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"Notificações de cuidado"})).toBeVisible();
+  await expect(page.getByText(/notificações estão indisponíveis neste navegador/i)).toBeVisible();
+  await page.getByRole("button",{name:"Abrir alertas",exact:true}).click();
+  await expect(page.getByRole("tab",{name:"Alertas",exact:true})).toHaveAttribute("aria-selected","true");
+});
 test("retorno à aba e mudança do dia atualizam dados", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-10-23T20:00:00Z") });
   let requests = 0;

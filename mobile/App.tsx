@@ -1710,6 +1710,55 @@ function Assistant({elder,caregiver,navigate}:{elder:number;caregiver:boolean;na
     {!!message&&<Text accessibilityRole="alert" style={s.error}>{message}</Text>}
   </View>;
 }
+function CaregiverNotices({onOpenAlerts}:{onOpenAlerts:()=>void}) {
+  const [feedback,setFeedback]=useState("");
+  const [busy,setBusy]=useState(false);
+  const browser=Platform.OS==="web";
+  const native=browser?window.CuidaliNative:undefined;
+  const supported=browser && typeof Notification!=="undefined"
+    && "serviceWorker" in navigator && "PushManager" in window;
+  const blocked=supported && Notification.permission==="denied";
+
+  async function activate() {
+    const push=window.CuidaliWebPush;
+    if (!push) {
+      setFeedback("As notificações ainda estão carregando. Tente novamente em instantes.");
+      return;
+    }
+    setBusy(true);
+    setFeedback("");
+    try {
+      const result=await push.activate(token=>api("/push-tokens","POST",{token,platform:"web"}));
+      setFeedback(result);
+    } catch (error) {
+      setFeedback((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <Card>
+    <Text accessibilityRole="header" style={s.subtitle}>Notificações de cuidado</Text>
+    <Text style={s.muted}>Receba no celular avisos de SOS, novos registros de dor e períodos sem atividade da pessoa que você acompanha.</Text>
+    {native ? <>
+      <Button label="Ativar notificações" onPress={()=>{
+        native.setMonitoring(true);
+        setFeedback("Se o Android pedir permissão, toque em Permitir para receber os avisos.");
+      }}/>
+      <Button label="Desativar notificações" tone="light" onPress={()=>{
+        native.setMonitoring(false);
+        setFeedback("Notificações desativadas neste aparelho.");
+      }}/>
+    </> : supported && !blocked
+      ? <Button label="Ativar notificações" busy={busy} onPress={activate}/>
+      : <Text style={s.text}>{blocked
+        ? "As notificações estão bloqueadas. Você pode liberá-las nas configurações do navegador."
+        : "As notificações estão indisponíveis neste navegador. Você pode acompanhar os avisos na aba Alertas."}</Text>}
+    <Button label="Abrir alertas" tone="light" onPress={onOpenAlerts}/>
+    {!!feedback && <Text accessibilityRole="alert" style={s.text}>{feedback}</Text>}
+  </Card>;
+}
+
 function Reminders({user,navigate,onRecorded}:{user:User;navigate:(tab:string)=>void;onRecorded:()=>void}) {
   const compact = useWindowDimensions().width < 600;
   const [notice,setNotice]=useState<any>(null),[error,setError]=useState(""),[busy,setBusy]=useState(false);
@@ -1989,10 +2038,7 @@ export default function App() {
           <Text style={[s.subtitle,{marginTop:12}]}>Sua conta</Text>
           <MenuRow label="Meus dados" subtitle="Perfil, e-mail e entrada com biometria" icon="person" onPress={()=>setTab('Meus dados')}/>
           <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}><LegalLink kind="terms" /><LegalLink kind="privacy" /></View>
-          {!demo && <Text style={[s.subtitle,{marginTop:12}]}>Avisos neste dispositivo</Text>}
-          {!demo && Platform.OS === "web" && !window.CuidaliNative && typeof Notification !== 'undefined' && <Button label="Ativar avisos neste navegador" tone="light" onPress={async()=>{try { if(!window.CuidaliWebPush) throw new Error("Os avisos ainda estão carregando. Tente novamente em instantes.");const message=await window.CuidaliWebPush.activate(token=>api('/push-tokens','POST',{token,platform:'web'}));setSessionMessage(message); } catch(e) {setSessionMessage((e as Error).message);}}} />}
-          {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Ativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(true);setSessionMessage("Acompanhamento ativado neste aparelho.");}} />}
-          {Platform.OS === "web" && !!window.CuidaliNative && <Button label="Desativar avisos neste aparelho" tone="light" onPress={()=>{window.CuidaliNative?.setMonitoring(false);setSessionMessage("Avisos desativados neste aparelho.");}} />}
+          {!demo && caregiver && <CaregiverNotices onOpenAlerts={()=>setTab("Alertas")}/>}
           <Button
             label="Sair da conta"
             tone="red"
