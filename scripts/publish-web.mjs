@@ -12,7 +12,7 @@ html=html.replace('</head>',`<meta name="theme-color" content="#39639A"/>
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-brand.png?v=3"/>
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-brand.png?v=3"/>
 <link rel="manifest" href="/manifest.webmanifest?v=3"/>
-<style>:focus-visible { outline: 3px solid #18746b; outline-offset: 2px; } @media (prefers-contrast: more) { :focus-visible { outline-width: 4px; } }</style>
+<style>:focus-visible { outline: 3px solid #18746b; outline-offset: 2px; } @media (prefers-contrast: more) { :focus-visible { outline-width: 4px; } } input::-ms-reveal { display: none; }</style>
 </head>`);
 html=html.replace('</body>','<script src="/push-client.js" defer></script><script src="/install.js" defer></script></body>');
 await writeFile(path.join(destination,'index.html'),html);

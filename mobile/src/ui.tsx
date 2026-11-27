@@ -16,6 +16,7 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import {
   filterPhone,
@@ -223,7 +224,8 @@ export function Form({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({}),
-    [shown, setShown] = useState(false);
+    [shown, setShown] = useState<Record<string,boolean>>({});
+  const multiplePasswords=fields.filter(field=>field.secure).length>1;
   const locked = useRef(false),
     refs = useRef<Record<string, any>>({});
   function change(key: string, value: any) {
@@ -388,6 +390,7 @@ export function Form({
         border: `${errors[f.key] ? 2 : 1}px solid ${errors[f.key] ? colors.red : "#7B8490"}`,
         borderRadius: 12,
         padding: 14,
+        ...(f.secure && {paddingRight:60}),
         fontSize: 18,
         color: "#1A2635",
         backgroundColor: "white",
@@ -403,7 +406,7 @@ export function Form({
         : React.createElement("input", {
             ...common,
             type: f.secure
-              ? shown
+              ? shown[f.key]
                 ? "text"
                 : "password"
               : f.phone
@@ -421,12 +424,13 @@ export function Form({
         editable={!busy}
         style={[
           styles.input,
+          f.secure && {paddingRight:60},
           multiline && { minHeight: shortForm ? 68 : 120, textAlignVertical: "top" },
           !!errors[f.key] && { borderColor: colors.red, borderWidth: 2 },
         ]}
         placeholder={f.placeholder}
         value={String(value ?? "")}
-        secureTextEntry={f.secure && !shown}
+        secureTextEntry={f.secure && !shown[f.key]}
         autoComplete={autoComplete}
         autoCapitalize={f.key === "code" ? "characters" : "none"}
         multiline={multiline}
@@ -492,12 +496,24 @@ export function Form({
                   onPress={() => change("times", [...values.times, ""])}
                 />
               </>
-            ) : (
-              input(f)
-            )}
-            {f.secure && (
-              <Pressable accessibilityRole="button" accessibilityLabel={shown ? "Ocultar senha" : "Mostrar senha"} disabled={busy} onPress={()=>setShown(!shown)} style={{minHeight:48,alignSelf:"flex-end",justifyContent:"center",paddingHorizontal:8}}><Text style={{fontSize:16,color:colors.blue,fontWeight:"600"}}>{shown ? "Ocultar senha" : "Mostrar senha"}</Text></Pressable>
-            )}
+            ) : f.secure ? (
+              <View>
+                {input(f)}
+                <Pressable accessibilityRole="button"
+                  accessibilityLabel={(shown[f.key]?"Ocultar senha":"Mostrar senha")+(multiplePasswords?" · "+f.label:"")}
+                  accessibilityState={{disabled:busy}} disabled={busy}
+                  onPress={()=>setShown(current=>({...current,[f.key]:!current[f.key]}))}
+                  style={({pressed,hovered}:{pressed:boolean;hovered?:boolean})=>({
+                    position:"absolute",right:4,top:4,width:48,height:48,borderRadius:9,
+                    alignItems:"center",justifyContent:"center",
+                    backgroundColor:pressed||hovered?colors.light:"transparent",opacity:busy ? .55 : 1,
+                  })}>
+                  <Image accessible={false} aria-hidden
+                    source={shown[f.key]?require("../assets/brand/icone-ocultar-senha.png"):require("../assets/brand/icone-mostrar-senha.png")}
+                    style={{width:24,height:24,tintColor:colors.blue}} resizeMode="contain"/>
+                </Pressable>
+              </View>
+            ) : input(f)}
             {f.newPassword && f.key==="password" && !errors[f.key] &&
               <Text style={styles.muted}>{passwordHelp}</Text>}
             {!!errors[f.key] && (

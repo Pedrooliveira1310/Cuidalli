@@ -117,9 +117,14 @@ test("inputs web, telefone digitado/colado, autocomplete e senha visível", asyn
   });
   await expect(password).toHaveAttribute("autocomplete", "new-password");
   await expect(password).toHaveAttribute("type", "password");
-  await page.getByRole("button", { name: "Mostrar senha" }).click();
+  const showPassword=page.getByRole("button",{name:"Mostrar senha"});
+  await expect(showPassword.locator('img[src*="icone-mostrar-senha"]')).toHaveCount(1);
+  await expect(page.getByText("Mostrar senha",{exact:true})).toHaveCount(0);
+  await showPassword.click();
   await expect(password).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "Ocultar senha" }).click();
+  const hidePassword=page.getByRole("button",{name:"Ocultar senha"});
+  await expect(hidePassword.locator('img[src*="icone-ocultar-senha"]')).toHaveCount(1);
+  await hidePassword.click();
   await expect(password).toHaveAttribute("type", "password");
   await page.getByRole("button", { name: "Já tenho conta · Entrar" }).click();
   await expect(page.getByLabel("Senha", { exact: true })).toHaveAttribute(
