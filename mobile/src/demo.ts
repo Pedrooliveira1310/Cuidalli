@@ -225,8 +225,9 @@ function answer(state: DemoState,role: Role,content: string) {
     action="Dores";
     reply="Abra Dores para ver ou registrar um exemplo.";
   }
-  state.messages.push({id:state.nextId++,content,reply});
-  return {reply,action,confirmation_doses,date:summary.date};
+  const id=state.nextId++;
+  state.messages.push({id,content,reply});
+  return {id,reply,action,confirmation_doses,date:summary.date};
 }
 
 function dispatch(state: DemoState,role: Role,path: string,method: string,data: Data) {

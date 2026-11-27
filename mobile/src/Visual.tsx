@@ -5,6 +5,8 @@ import {colors,styles as s} from './ui';
 const paths:Record<string,string>={
  home:'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',
  chat:'M21 11a8 8 0 0 1-8 8H7l-5 3 2-6a8 8 0 1 1 17-5Z',
+ microphone:'M12 2a3 3 0 0 0-3 3v7a3 3 0 1 0 6 0V5a3 3 0 0 0-3-3ZM5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8',
+ send:'m22 2-7 20-4-9-9-4 20-7ZM11 13 22 2',
  help:'M12 8v5m0 4h.01M10.3 3.8 2.4 18a2 2 0 0 0 1.8 3h15.6a2 2 0 0 0 1.8-3L13.7 3.8a2 2 0 0 0-3.4 0Z',
  person:'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a8 8 0 0 1 16 0v2',
  pills:'m8 4-5 5a6 6 0 0 0 8 8l5-5a6 6 0 0 0-8-8Zm-3 3 8 8',
@@ -28,7 +30,7 @@ export function AppIcon({name,size=26,color=colors.blue}:{name:string;size?:numb
    source={name==='elder'?require('../assets/prototype/elder.png'):require('../assets/brand/icone-dor.png')}
    style={{width:size,height:size,tintColor:color,flexShrink:0}} resizeMode="contain"/>;
  if(Platform.OS==='web')return React.createElement('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:color,strokeWidth:1.9,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true,style:{flexShrink:0}},React.createElement('path',{d:paths[name]||paths.person}));
- const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃'};
+ const fallback:Record<string,string> = {check:'✓',help:'!',chevron:'›',menu:'☰',sidebar:'☰',close:'×',down:'⌄',up:'⌃',microphone:'🎙',send:'➤'};
  return <Text style={{fontSize:size,color}}>{fallback[name]??'+'}</Text>;
 }
 export function BrandMark({size=48}:{size?:number}){

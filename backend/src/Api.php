@@ -470,8 +470,9 @@ final class Api {
                 $reply=$aiAnswer['reply']."\n\n".$reply;
             }
             $this->query('INSERT INTO assistant_messages(elder_id,content,reply) VALUES(?,?,?)',[$elder,$message,$reply]);
+            $messageId=(int)$this->db->lastInsertId();
             if($this->user['role']==='elder') $this->activity($elder,'assistant_used');
-            return ['reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d'),'mode'=>$urgent?'urgent':($aiAnswer===null?'local':'ai')];
+            return ['id'=>$messageId,'reply'=>$reply,'action'=>$action,'confirmation_doses'=>$confirmationDoses,'date'=>date('Y-m-d'),'mode'=>$urgent?'urgent':($aiAnswer===null?'local':'ai')];
         }
         $this->fail(405,'Método não permitido.');
     }

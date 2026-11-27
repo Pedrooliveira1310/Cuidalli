@@ -347,6 +347,15 @@ test("mapa conserva o ponto marcado ao girar, com observação multilinha e larg
   await page.getByRole("button", { name: "Frente", exact: true }).click();
   await expect(page.getByTestId("pain-body-map").getByRole("button",{name:"Abdômen",exact:true})).toHaveAttribute("aria-pressed","true");
   await expect(page.getByText("2 regiões marcadas", {exact:true})).toBeVisible();
+  await page.getByTestId("pain-body-map").getByRole("button",{name:"Região íntima",exact:true}).click();
+  await page.getByRole("button",{name:"Feminina",exact:true}).click();
+  await page.getByRole("button",{name:"Vulva",exact:true}).click();
+  await expect(page.getByText("3 regiões marcadas",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Desmarcar Vulva",exact:true}).click();
+  await expect(page.getByText("2 regiões marcadas",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Vulva",exact:true}).click();
+  await page.getByRole("button",{name:"Limpar seleção íntima",exact:true}).click();
+  await expect(page.getByText("2 regiões marcadas",{exact:true})).toBeVisible();
   await expect(await advanceTo(page,page.getByLabel("Observação", { exact: true }))).toHaveJSProperty(
     "tagName",
     "TEXTAREA",
